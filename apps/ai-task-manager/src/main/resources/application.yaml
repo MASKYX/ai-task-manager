@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: ai-task-manager
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://aws-1-eu-west-1.pooler.supabase.com:5432/postgres}
+    username: ${DB_USERNAME:postgres.ntgfvbkwpfebwkqaiyyk}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.eu-north-1.amazonaws.com/eu-north-1_7WSR32ZZq}
+
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:1049882223608-q5c2asci2ab0uesf5p91tj9v5nocegf0.apps.googleusercontent.com}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            # redirect-uri: "{baseUrl}/login/oauth2/code/google"
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid, https://www.googleapis.com/auth/calendar

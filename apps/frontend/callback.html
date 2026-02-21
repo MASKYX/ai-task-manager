@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div>
+        Hello:
+        <pre id="email"></pre>
+        Access token:
+        <pre id="access-token"></pre>
+        ID token:
+        <pre id="id-token"></pre>
+        Refresh token:
+        <pre id="refresh-token"></pre>
+    </div>
+
+    <div>
+        <button id="signOut">Log out</button>
+    </div>
+
+    <div>
+        <pre id="api-response-public"></pre>
+    </div>
+    <div>
+        <pre id="api-response-private"></pre>
+    </div>
+    <div>
+        <button id="calendar">Calendar</button>
+    </div>
+
+
+</body>
+<script type="module">
+    import { userManager, signOutRedirect } from "./src/main.ts";
+    const API_BASE = import.meta.env.VITE_API_BASE;
+
+    const user = await userManager.getUser();
+    const accessToken = user?.access_token;
+    if (user) {
+        document.getElementById("email").textContent = user.profile?.email;
+        document.getElementById("access-token").textContent = user.access_token;
+        document.getElementById("id-token").textContent = user.id_token;
+        document.getElementById("refresh-token").textContent = user.refresh_token;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/test/public`, {
+            method: "GET",
+            headers: {
+                Accept: "application/json",
+            },
+        });
+
+        const bodyText = await res.text();
+        document.getElementById("api-response-public").textContent = `HTTP ${res.status}\n\n${bodyText}`;
+    } catch (err) {
+        document.getElementById("api-response-public").textContent = `Request failed: ${String(err)}`;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/test/private`, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${user.access_token}`,
+                Accept: "application/json",
+            },
+        });
+
+        const bodyText = await res.text();
+        document.getElementById("api-response-private").textContent = `HTTP ${res.status}\n\n${bodyText}`;
+    } catch (err) {
+        document.getElementById("api-response-private").textContent = `Request failed: ${String(err)}`;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const hasCode = params.has("code");
+    const hasState = params.has("state");
+    if (hasCode && hasState) {
+        userManager.signinCallback().then(function (user) {
+            window.location.href = "/callback";
+        });
+    }
+
+    document.getElementById("signOut").addEventListener("click", async () => {
+        await signOutRedirect();
+    });
+
+    document.getElementById("calendar").addEventListener("click", async () => {
+        window.location.href = import.meta.env.VITE_GOOGLE_OAUTH2_URL;
+    });
+</script>
+
+</html>
