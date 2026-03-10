@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Google callback</title>
+</head>
+
+<body>
+    <h2>Google callback</h2>
+    <pre id="google-result">Loading...</pre>
+
+
+    <div>
+        <button id="get-events">Get upcoming events</button>
+    </div>
+    <div>
+        <pre id="api-response-calendar"></pre>
+    </div>
+    <script type="module">
+        import { userManager } from "./src/main.ts";
+
+        const API_BASE = import.meta.env.VITE_API_BASE;
+        const output = document.getElementById("google-result");
+
+        try {
+            const user = await userManager.getUser();
+
+            if (!user?.access_token) {
+                output.textContent = "No Cognito access token found";
+            } else {
+                const res = await fetch(`${API_BASE}/api/calendar/events/upcoming`, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${user.access_token}`,
+                        Accept: "application/json",
+                    },
+                });
+
+                const bodyText = await res.text();
+                output.textContent = `HTTP ${res.status}\n\n${bodyText}`;
+            }
+        } catch (err) {
+            output.textContent = `Request failed: ${String(err)}`;
+        }
+
+
+        document.getElementById("get-events").addEventListener("click", async () => {
+                    try {
+                const res = await fetch(`${API_BASE}/api/calendar/events/upcoming`, {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${user.access_token}`,
+                        Accept: "application/json",
+                    },
+                });
+
+                const bodyText = await res.text();
+                document.getElementById("api-response-calendar").textContent = `HTTP ${res.status}\n\n${bodyText}`;
+            } catch (err) {
+                document.getElementById("api-response-calendar").textContent = `Request failed: ${String(err)}`;
+            }
+        });
+    </script>
+</body>
+
+</html>

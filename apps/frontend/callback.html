@@ -32,6 +32,12 @@
     <div>
         <button id="calendar">Calendar</button>
     </div>
+    <div>
+        <button id="get-events">Get upcoming events</button>
+    </div>
+    <div>
+        <pre id="api-response-calendar"></pre>
+    </div>
 
 
 </body>
@@ -91,7 +97,34 @@
     });
 
     document.getElementById("calendar").addEventListener("click", async () => {
-        window.location.href = import.meta.env.VITE_GOOGLE_OAUTH2_URL;
+        const res = await fetch(`${API_BASE}/api/google/connect`, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: "application/json",
+            },
+            credentials: "include",
+        });
+
+        const data = await res.json();
+        window.location.href = data.redirectUrl;
+    });
+
+    document.getElementById("get-events").addEventListener("click", async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/calendar/events/upcoming`, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${user.access_token}`,
+                    Accept: "application/json",
+                },
+            });
+
+            const bodyText = await res.text();
+            document.getElementById("api-response-calendar").textContent = `HTTP ${res.status}\n\n${bodyText}`;
+        } catch (err) {
+            document.getElementById("api-response-calendar").textContent = `Request failed: ${String(err)}`;
+        }
     });
 </script>
 
