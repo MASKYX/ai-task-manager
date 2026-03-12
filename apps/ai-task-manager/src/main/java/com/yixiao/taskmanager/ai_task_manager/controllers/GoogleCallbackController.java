@@ -20,7 +20,7 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Controller
-public class GoogleOAuthController {
+public class GoogleCallbackController {
 
     @Autowired
     private OAuth2AuthorizedClientManager authorizedClientManager;
@@ -52,6 +52,7 @@ public class GoogleOAuthController {
 
         OAuth2AccessToken accessToken = authorizedClient.getAccessToken();
         OAuth2RefreshToken refreshToken = authorizedClient.getRefreshToken();
+        if(refreshToken == null){System.out.println("refresh token is null");}
 
         HttpSession session = servletRequest.getSession(false);
         if (session == null) {
@@ -83,6 +84,6 @@ public class GoogleOAuthController {
 
         System.out.println("Google access token saved for user " + userId);
 
-        return "redirect:http://localhost:5173/callback";
+        return "redirect:http://localhost:5173/";
     }
 }

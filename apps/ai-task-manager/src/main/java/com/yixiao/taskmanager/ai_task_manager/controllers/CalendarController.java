@@ -1,7 +1,7 @@
 package com.yixiao.taskmanager.ai_task_manager.controllers;
 
 import com.yixiao.taskmanager.ai_task_manager.dto.CalendarEventDto;
-import com.yixiao.taskmanager.ai_task_manager.services.google.GoogleAccessTokenService;
+import com.yixiao.taskmanager.ai_task_manager.services.google.GoogleTokenService;
 import com.yixiao.taskmanager.ai_task_manager.services.google.GoogleCalendarService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,7 +16,7 @@ import java.util.List;
 public class CalendarController {
 
     @Autowired
-    private GoogleAccessTokenService googleAccessTokenService;
+    private GoogleTokenService googleTokenService;
 
     @Autowired
     private GoogleCalendarService googleCalendarService;
@@ -26,7 +26,7 @@ public class CalendarController {
                                                     HttpServletRequest request,
                                                     HttpServletResponse response) {
 
-        String accessToken = googleAccessTokenService.getAccessToken(authentication);
+        String accessToken = googleTokenService.getAccessToken(authentication);
         return googleCalendarService.getUpcomingEvents(accessToken);
     }
 
@@ -37,7 +37,7 @@ public class CalendarController {
                                                        @RequestParam String timeMin,
                                                        @RequestParam String timeMax) {
 
-        String accessToken = googleAccessTokenService.getAccessToken(authentication);
+        String accessToken = googleTokenService.getAccessToken(authentication);
         return googleCalendarService.getEventsInDateRange(accessToken, timeMin, timeMax);
     }
 
@@ -47,7 +47,7 @@ public class CalendarController {
                                         HttpServletResponse response,
                                         @RequestBody CalendarEventDto calendarEventDto) {
 
-        String accessToken = googleAccessTokenService.getAccessToken(authentication);
+        String accessToken = googleTokenService.getAccessToken(authentication);
         return googleCalendarService.createEvent(accessToken, calendarEventDto);
     }
 
@@ -58,7 +58,7 @@ public class CalendarController {
                                         @PathVariable String eventId,
                                         @RequestBody CalendarEventDto calendarEventDto) {
 
-        String accessToken = googleAccessTokenService.getAccessToken(authentication);
+        String accessToken = googleTokenService.getAccessToken(authentication);
         return googleCalendarService.updateEvent(accessToken, eventId, calendarEventDto);
     }
 
@@ -68,7 +68,7 @@ public class CalendarController {
                             HttpServletResponse response,
                             @PathVariable String eventId) {
 
-        String accessToken = googleAccessTokenService.getAccessToken(authentication);
+        String accessToken = googleTokenService.getAccessToken(authentication);
         googleCalendarService.deleteEvent(accessToken, eventId);
     }
 }

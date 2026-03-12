@@ -1,24 +1,120 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-  </head>
-  <body>
-    <button id="signIn">Sign In</button>
-  </body>
-  <script type="module">
-    import { userManager } from "./src/main.ts";
 
-    document.getElementById("signIn").addEventListener("click", async () => {
-      const user = await userManager.getUser();
-      if(user){
-        window.location.href = "/callback";
-      }else{
-        await userManager.signinRedirect();
-      }
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div>
+        <button id="signOut">Log out</button>
+    </div>
+    <div>
+        <pre id="api-response-public"></pre>
+    </div>
+    <div>
+        <pre id="api-response-private"></pre>
+    </div>
+    <div>
+        <button id="calendar">Calendar</button>
+    </div>
+    <div>
+        <button id="get-events">Get upcoming events</button>
+    </div>
+    <div>
+        <pre id="api-response-calendar"></pre>
+    </div>
+</body>
+
+<script type="module">
+    import { userManager, signOutRedirect } from "./src/main.ts";
+
+    const API_BASE = import.meta.env.VITE_API_BASE;
+    const user = await userManager.getUser();
+
+    if (!user || user.expired) {
+        window.location.replace("/sign-in.html");
+        throw new Error("No authenticated user");
+    }
+
+    const accessToken = user.access_token;
+    
+    try {
+        const res = await fetch(`${API_BASE}/test/public`, {
+            method: "GET",
+            headers: {
+                Accept: "application/json",
+            },
+        });
+
+        const bodyText = await res.text();
+        document.getElementById("api-response-public").textContent =
+            `HTTP ${res.status}\n\n${bodyText}`;
+    } catch (err) {
+        document.getElementById("api-response-public").textContent =
+            `Request failed: ${String(err)}`;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/test/private`, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${user.access_token}`,
+                Accept: "application/json",
+            },
+        });
+
+        const bodyText = await res.text();
+        document.getElementById("api-response-private").textContent =
+            `HTTP ${res.status}\n\n${bodyText}`;
+    } catch (err) {
+        document.getElementById("api-response-private").textContent =
+            `Request failed: ${String(err)}`;
+    }
+
+    document.getElementById("signOut").addEventListener("click", async () => {
+        await signOutRedirect();
+    });
+
+    document.getElementById("calendar").addEventListener("click", async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/google/connect`, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    Accept: "application/json",
+                },
+                credentials: "include",
+            });
+
+            const data = await res.json();
+            window.location.href = data.redirectUrl;
+        } catch (err) {
+            document.getElementById("api-response-calendar").textContent =
+                `Google connect failed: ${String(err)}`;
+        }
+    });
+
+    document.getElementById("get-events").addEventListener("click", async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/calendar/events/upcoming`, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${user.access_token}`,
+                    Accept: "application/json",
+                },
+            });
+
+            const bodyText = await res.text();
+            document.getElementById("api-response-calendar").textContent =
+                `HTTP ${res.status}\n\n${bodyText}`;
+        } catch (err) {
+            document.getElementById("api-response-calendar").textContent =
+                `Request failed: ${String(err)}`;
+        }
     });
 </script>
+
 </html>

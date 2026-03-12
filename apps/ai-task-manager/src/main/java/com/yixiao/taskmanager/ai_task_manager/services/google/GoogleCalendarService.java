@@ -8,6 +8,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,12 +29,16 @@ public class GoogleCalendarService {
     }
 
     public List<CalendarEventDto> getUpcomingEvents(String accessToken) {
+        String now = OffsetDateTime.now(ZoneOffset.UTC)
+                .withNano(0)
+                .toString();
         GoogleEventsResponse response = restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/calendars/{calendarId}/events")
                         .queryParam("maxResults", 10)
                         .queryParam("singleEvents", true)
                         .queryParam("orderBy", "startTime")
+                        .queryParam("timeMin", now)
                         .build(PRIMARY_CALENDAR))
                 .headers(headers -> headers.setBearerAuth(accessToken))
                 .retrieve()
