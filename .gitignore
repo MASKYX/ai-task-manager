@@ -56,3 +56,6 @@ build/
 coverage/
 *.exec
 *.lcov
+
+# python
+.venv/
