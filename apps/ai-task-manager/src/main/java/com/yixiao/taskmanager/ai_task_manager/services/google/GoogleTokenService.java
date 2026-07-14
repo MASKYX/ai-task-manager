@@ -1,8 +1,7 @@
 package com.yixiao.taskmanager.ai_task_manager.services.google;
 
-import com.yixiao.taskmanager.ai_task_manager.mappers.GoogleTokenMapper;
-import com.yixiao.taskmanager.ai_task_manager.mappers.UserMapper;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.yixiao.taskmanager.ai_task_manager.entities.GoogleOAuthTokenEntity;
+import com.yixiao.taskmanager.ai_task_manager.services.UserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
@@ -19,11 +18,8 @@ import java.util.UUID;
 @Service
 public class GoogleTokenService {
 
-    @Autowired
-    private UserMapper userMapper;
-
-    @Autowired
-    private GoogleTokenMapper googleTokenMapper;
+    private final UserService userService;
+    private final GoogleOAuthTokenStore googleOAuthTokenStore;
 
     private final RestClient restClient;
 
@@ -33,7 +29,13 @@ public class GoogleTokenService {
     @Value("${spring.security.oauth2.client.registration.google.client-secret}")
     private String clientSecret;
 
-    public GoogleTokenService(RestClient.Builder restClientBuilder) {
+    public GoogleTokenService(
+            RestClient.Builder restClientBuilder,
+            UserService userService,
+            GoogleOAuthTokenStore googleOAuthTokenStore
+    ) {
+        this.userService = userService;
+        this.googleOAuthTokenStore = googleOAuthTokenStore;
         this.restClient = restClientBuilder
                 .baseUrl("https://oauth2.googleapis.com")
                 .build();
@@ -42,13 +44,15 @@ public class GoogleTokenService {
     public String getAccessToken(Authentication authentication) {
         String cognitoSub = extractCognitoSub(authentication);
 
-        UUID userId = UUID.fromString(userMapper.upsertAndGetId(cognitoSub));
+        UUID userId = userService.getOrCreateUserId(cognitoSub);
 
-        String accessToken = googleTokenMapper.findActiveAccessTokenByUserId(userId);
-        OffsetDateTime expiresAt = googleTokenMapper.findActiveAccessTokenExpiresAtByUserId(userId);
+        GoogleOAuthTokenEntity activeToken = googleOAuthTokenStore.findActiveByUserId(userId)
+                .orElse(null);
+        String accessToken = activeToken != null ? activeToken.getAccessToken() : null;
+        OffsetDateTime expiresAt = activeToken != null ? activeToken.getExpiresAt() : null;
 
         if (accessToken == null || (expiresAt != null && expiresAt.isBefore(OffsetDateTime.now()))) {
-            String refreshToken = googleTokenMapper.findActiveRefreshTokenByUserId(userId);
+            String refreshToken = activeToken != null ? activeToken.getRefreshToken() : null;
             accessToken = refreshAccessToken(userId, refreshToken);
         }
 
@@ -77,7 +81,7 @@ public class GoogleTokenService {
         Number expiresIn = (Number) response.get("expires_in");
         OffsetDateTime newExpiresAt = OffsetDateTime.now().plusSeconds(expiresIn.longValue());
 
-        googleTokenMapper.upsertTokens(
+        googleOAuthTokenStore.upsertTokens(
                 userId,
                 refreshToken,
                 newAccessToken,

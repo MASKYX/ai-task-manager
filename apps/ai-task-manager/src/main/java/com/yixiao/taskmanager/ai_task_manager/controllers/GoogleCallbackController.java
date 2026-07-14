@@ -1,7 +1,7 @@
 package com.yixiao.taskmanager.ai_task_manager.controllers;
 
-import com.yixiao.taskmanager.ai_task_manager.mappers.GoogleTokenMapper;
-import com.yixiao.taskmanager.ai_task_manager.mappers.UserMapper;
+import com.yixiao.taskmanager.ai_task_manager.services.UserService;
+import com.yixiao.taskmanager.ai_task_manager.services.google.GoogleOAuthTokenStore;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -26,10 +26,10 @@ public class GoogleCallbackController {
     private OAuth2AuthorizedClientManager authorizedClientManager;
 
     @Autowired
-    private UserMapper userMapper;
+    private UserService userService;
 
     @Autowired
-    private GoogleTokenMapper googleTokenMapper;
+    private GoogleOAuthTokenStore googleOAuthTokenStore;
 
     @GetMapping("/access-granted")
     public String index(Authentication authentication,
@@ -64,7 +64,7 @@ public class GoogleCallbackController {
             throw new IllegalStateException("Cognito sub not found in session");
         }
 
-        UUID userId = UUID.fromString(userMapper.upsertAndGetId(cognitoSub));
+        UUID userId = userService.getOrCreateUserId(cognitoSub);
 
         OffsetDateTime expiresAt = accessToken.getExpiresAt() != null
                 ? OffsetDateTime.ofInstant(accessToken.getExpiresAt(), ZoneOffset.UTC)
@@ -74,7 +74,7 @@ public class GoogleCallbackController {
                 ? String.join(" ", accessToken.getScopes())
                 : null;
 
-        googleTokenMapper.upsertTokens(
+        googleOAuthTokenStore.upsertTokens(
                 userId,
                 refreshToken != null ? refreshToken.getTokenValue() : null,
                 accessToken.getTokenValue(),
