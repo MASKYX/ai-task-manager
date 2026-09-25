@@ -4,117 +4,1023 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>AI Task Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+
+        .grid-cell { transition: all 0.2s; display: flex; flex-direction: column; min-height: 100px; }
+        .grid-cell:hover { z-index: 10; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-color: #a5b4fc; }
+
+        .dragging { opacity: 0.5; transform: scale(0.95); }
+        .drag-over { background-color: #eef2ff; border: 2px dashed #6366f1; }
+
+        .scrollable-cell { overflow-y: auto; flex-grow: 1; max-height: 150px; }
+        .bot-panel { width: 360px; min-width: 320px; min-height: 0; flex-shrink: 0; }
+        .bot-transcript { min-height: 0; overflow-y: auto; }
+        @media (max-width: 900px) {
+            #task-sidebar { display: none; }
+            .bot-panel { width: 320px; min-width: 280px; }
+        }
+        @media (max-width: 700px) {
+            #app-main { flex-direction: column; }
+            #calendar-panel { min-height: 45%; }
+            .bot-panel { width: 100%; min-width: 0; height: 55%; border-left: 0; border-top: 1px solid #e5e7eb; }
+        }
+
+        /* All-day visual effect: disabled/dimmed time fields */
+        .allday-disabled {
+            opacity: 0.4;
+            pointer-events: none;
+            background-color: #f3f4f6;
+            position: relative;
+        }
+        .allday-disabled::after {
+            content: 'All day';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            color: #9ca3af;
+            background: rgba(243,244,246,0.85);
+            border-radius: 0.375rem;
+        }
+    </style>
 </head>
 
-<body>
-    <div>
-        <button id="signOut">Log out</button>
+<body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- Top navigation bar -->
+    <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm z-20">
+        <div class="flex items-center space-x-4">
+            <h1 class="text-xl font-bold text-indigo-600">TaskAI</h1>
+
+            <!-- Undo / Redo -->
+            <div class="flex space-x-2 text-gray-400">
+                <button class="hover:text-gray-600 p-1 rounded hover:bg-gray-100" title="Undo">↶</button>
+                <button class="hover:text-gray-600 p-1 rounded hover:bg-gray-100" title="Redo">↷</button>
+            </div>
+
+            <!-- Date navigation -->
+            <div class="flex items-center bg-gray-100 rounded-lg p-1">
+                <button id="btn-today" class="px-3 py-1 text-sm font-medium text-gray-600 hover:bg-white rounded-md shadow-sm transition-all">Today</button>
+                <button id="btn-prev-month" class="p-1 px-2 hover:bg-gray-200 rounded transition-colors font-bold text-gray-500">&lt;</button>
+                <span id="current-month-display" class="text-sm font-semibold text-gray-700 text-center select-none w-[130px]">September 2026</span>
+                <button id="btn-next-month" class="p-1 px-2 hover:bg-gray-200 rounded transition-colors font-bold text-gray-500">&gt;</button>
+            </div>
+
+            <!-- View toggle: Default to My DB -->
+            <div class="flex items-center bg-indigo-50 rounded-full p-1 border border-indigo-100">
+                <button id="btn-google" class="px-3 py-1 text-xs font-medium rounded-full text-gray-500 hover:text-indigo-600">Google</button>
+                <button id="btn-myDB" class="px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm">My DB</button>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-3 border-l pl-4 border-gray-200">
+                <span class="text-sm text-gray-500 hidden md:inline" id="user-email">Loading...</span>
+                <button id="signOut" class="text-sm font-medium text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors">Log out</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main content area -->
+    <main id="app-main" class="flex-1 flex min-h-0 overflow-hidden">
+
+        <!-- Left side: task list -->
+        <aside id="task-sidebar" class="w-72 bg-white border-r border-gray-200 flex flex-col shadow-sm z-10">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="font-semibold text-gray-700">Tasks</h2>
+            </div>
+
+            <div id="task-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <!-- Add task button always on top -->
+                <div id="add-task-btn" class="mb-2 w-full py-2 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-500 text-sm font-medium hover:border-indigo-400 hover:text-indigo-500 cursor-pointer transition-colors bg-gray-50 hover:bg-indigo-50">
+                    + Add task
+                </div>
+                <!-- Tasks injected below by JS -->
+            </div>
+        </aside>
+
+        <!-- Center: calendar/grid view -->
+        <section id="calendar-panel" class="flex-1 min-w-0 min-h-0 flex flex-col bg-gray-50 relative">
+            <!-- Grid container (legend removed) -->
+            <div class="flex-1 overflow-auto p-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 h-full min-h-[600px] p-4 flex flex-col">
+                    <!-- Week header -->
+                    <div class="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-semibold text-gray-400 uppercase">
+                        <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+                    </div>
+                    <!-- Calendar cells -->
+                    <div class="grid grid-cols-7 gap-2 flex-1 auto-rows-fr" id="calendar-grid"></div>
+                </div>
+            </div>
+
+            <!-- Debug panel -->
+            <div class="absolute bottom-4 left-4 right-4 pointer-events-none">
+                <details class="bg-white/90 backdrop-blur rounded-lg shadow-lg border border-gray-200 text-xs pointer-events-auto">
+                    <summary class="p-2 cursor-pointer font-medium text-gray-600 select-none">🛠️ Debug / API Responses</summary>
+                    <div class="p-3 border-t border-gray-100 space-y-2 max-h-40 overflow-y-auto font-mono bg-gray-50">
+                        <div><strong>Public:</strong> <pre id="api-response-public" class="inline">...</pre></div>
+                        <div><strong>Private:</strong> <pre id="api-response-private" class="inline">...</pre></div>
+                        <div><strong>Calendar:</strong> <pre id="api-response-calendar" class="inline">...</pre></div>
+                    </div>
+                </details>
+            </div>
+        </section>
+
+        <!-- Right side: AI assistant -->
+        <aside class="bot-panel bg-white border-l border-gray-200 flex flex-col shadow-sm z-10" aria-label="My Bot">
+            <div class="flex-none px-4 py-3 border-b border-gray-200 bg-indigo-50/50 flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="font-bold text-indigo-800">🤖 My Bot</h2>
+                    <p class="text-xs text-gray-500">Calendar assistant</p>
+                    <div class="mt-1 flex items-center gap-1 text-xs text-gray-600">
+                        <span id="bot-quota" aria-live="polite">Loading requests...</span>
+                        <span class="group relative inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-400 text-[10px] font-bold" tabindex="0" aria-label="AI request limit information">i
+                            <span role="tooltip" class="pointer-events-none absolute left-1/2 top-5 z-20 hidden w-48 -translate-x-1/2 rounded-md bg-gray-800 px-2 py-1.5 text-left text-[11px] font-normal text-white shadow-lg group-hover:block group-focus:block">You have 20 AI requests per day by default. The limit refreshes daily.</span>
+                        </span>
+                    </div>
+                </div>
+                <button id="bot-clear-history" type="button" class="text-xs font-medium text-gray-600 hover:text-red-600 border border-gray-300 hover:border-red-300 rounded-md px-2 py-1.5" title="Clear conversation history">Clear chat</button>
+            </div>
+            <p id="bot-quota-message" class="hidden flex-none border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800" role="status">Daily AI request limit reached. Requests will be available again after the daily reset.</p>
+            <details id="bot-preferences-panel" class="flex-none border-b border-gray-200 bg-gray-50">
+                <summary class="cursor-pointer select-none px-4 py-3 text-sm font-medium text-gray-700 hover:text-indigo-700">⚙️ Preferences</summary>
+                <div class="px-4 pb-4">
+                    <label for="bot-preferences" class="text-xs text-gray-600 block mb-1">How should My Bot plan for you?</label>
+                    <textarea id="bot-preferences" class="w-full h-20 text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-200 outline-none resize-y" placeholder="E.g. Prefer mornings and leave breaks between meetings."></textarea>
+                </div>
+            </details>
+            <div id="bot-messages" role="log" aria-live="polite" aria-label="Conversation" class="bot-transcript flex-1 px-4 py-4 space-y-3 text-sm"></div>
+            <div class="flex-none border-t border-gray-200 bg-white px-4 py-3">
+                <label for="bot-request" class="block text-xs font-semibold text-gray-600 mb-2">Your message</label>
+                <div class="flex items-end gap-2">
+                    <textarea id="bot-request" rows="2" class="min-w-0 flex-1 max-h-32 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm leading-5 focus:ring-2 focus:ring-indigo-200 outline-none" placeholder="Ask My Bot to plan your calendar..."></textarea>
+                    <button id="bot-send" type="button" class="flex-none rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50" aria-label="Send request">Send</button>
+                </div>
+                <p class="mt-1 text-[11px] text-gray-400">Enter to send · Shift+Enter for a new line</p>
+            </div>
+            <div class="hidden"><button id="calendar">Connect</button><button id="get-events">Get</button></div>
+        </aside>
+    </main>
+
+    <!-- CREATE TASK MODAL -->
+    <div id="create-modal" class="fixed inset-0 z-50 hidden">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+            <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+                    <div class="bg-white px-4 pb-4 pt-5 sm:p-6">
+                        <div class="sm:flex sm:items-start">
+                            <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 sm:mx-0 sm:h-10 sm:w-10">
+                                <span class="text-indigo-600 text-xl">+</span>
+                            </div>
+                            <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
+                                <h3 class="text-base font-semibold leading-6 text-gray-900">Add new task</h3>
+                                <div class="mt-4 space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-900">Title</label>
+                                        <input type="text" id="create-summary" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2" placeholder="E.g: Team meeting">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-900">Description</label>
+                                        <textarea id="create-desc" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"></textarea>
+                                    </div>
+
+                                    <!-- All day toggle (default checked) -->
+                                    <div class="flex items-center">
+                                        <input id="create-allday" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600">
+                                        <label for="create-allday" class="ml-2 block text-sm text-gray-900">All day</label>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-900">Start date</label>
+                                            <input type="date" id="create-start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2">
+                                            <div id="create-start-time-wrap" class="mt-2 allday-disabled">
+                                                <label class="block text-xs font-medium text-gray-500 mb-1">Start time</label>
+                                                <input type="time" id="create-start-time" class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm border p-2">
+                                            </div>
+                                        </div>
+                                        <div id="create-end-wrap">
+                                            <label class="block text-sm font-medium text-gray-900">End date</label>
+                                            <input type="date" id="create-end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2">
+                                            <div id="create-end-time-wrap" class="mt-2 allday-disabled">
+                                                <label class="block text-xs font-medium text-gray-500 mb-1">End time</label>
+                                                <input type="time" id="create-end-time" class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm border p-2">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                        <button id="confirm-create-btn" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:ml-3 sm:w-auto">Add</button>
+                        <button id="cancel-create-btn" class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div>
-        <pre id="api-response-public"></pre>
+
+    <!-- EDIT TASK MODAL -->
+    <div id="edit-modal" class="fixed inset-0 z-50 hidden">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+            <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+                    <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-base font-semibold leading-6 text-gray-900">Edit Task</h3>
+                            <button id="delete-task-btn" class="inline-flex items-center rounded-md bg-white px-2 py-1 text-sm font-semibold text-red-600 shadow-sm ring-1 ring-inset ring-red-300 hover:bg-red-50 transition-colors" title="Delete Task">
+                                🗑️ Delete
+                            </button>
+                        </div>
+
+                        <div class="space-y-4">
+                            <input type="hidden" id="edit-id">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-900">Title</label>
+                                <input type="text" id="edit-summary" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-900">Description</label>
+                                <textarea id="edit-desc" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"></textarea>
+                            </div>
+
+                            <div class="flex items-center">
+                                <input id="edit-allday" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600">
+                                <label for="edit-allday" class="ml-2 block text-sm text-gray-900">All day</label>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-900">Start date</label>
+                                    <input type="date" id="edit-start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2">
+                                    <div id="edit-start-time-wrap" class="mt-2">
+                                        <label class="block text-xs font-medium text-gray-500 mb-1">Start time</label>
+                                        <input type="time" id="edit-start-time" class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm border p-2">
+                                    </div>
+                                </div>
+                                <div id="edit-end-wrap">
+                                    <label class="block text-sm font-medium text-gray-900">End date</label>
+                                    <input type="date" id="edit-end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2">
+                                    <div id="edit-end-time-wrap" class="mt-2">
+                                        <label class="block text-xs font-medium text-gray-500 mb-1">End time</label>
+                                        <input type="time" id="edit-end-time" class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm border p-2">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                        <button id="save-edit-btn" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:ml-3 sm:w-auto">Save</button>
+                        <button id="cancel-edit-btn" class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div>
-        <pre id="api-response-private"></pre>
-    </div>
-    <div>
-        <button id="calendar">Calendar</button>
-    </div>
-    <div>
-        <button id="get-events">Get upcoming events</button>
-    </div>
-    <div>
-        <pre id="api-response-calendar"></pre>
-    </div>
+
+    <script type="module">
+        import { userManager, signOutRedirect } from "./src/main.ts";
+        import { localDateKey, eventDayKey, moveEvent, eventInputDate, eventInputTime, formEventDates } from "./src/calendarDates.ts";
+        import { BotSession, quotaView } from "./src/botSession.ts";
+
+        const API_BASE = import.meta.env.VITE_API_BASE;
+        const user = await userManager.getUser();
+
+        if (user && user.profile) {
+            const emailEl = document.getElementById('user-email');
+            if (emailEl) emailEl.textContent = user.profile.email || user.profile.name || 'User';
+        }
+
+        if (!user || user.expired) {
+            window.location.replace("/sign-in.html");
+            throw new Error("No authenticated user");
+        }
+
+        const accessToken = user.access_token;
+
+        // --- STATE ---
+        let currentViewDate = new Date();
+        let allEventsCache = [];
+
+        // --- HELPER: Get Monday of a given week (ISO week: Mon=0 ... Sun=6) ---
+        function getMonday(d) {
+            const date = new Date(d);
+            const day = date.getDay();
+            const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+            return new Date(date.getFullYear(), date.getMonth(), diff);
+        }
+
+        // --- DATA FETCHING ---
+        async function fetchAllData() {
+            try {
+                // Fetch ALL tasks for sidebar: 1 year before to 1 year after
+                const now = new Date();
+                const oneYearBefore = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+                const oneYearAfter = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate(), 23, 59, 59);
+                const timeMinAll = encodeURIComponent(oneYearBefore.toISOString());
+                const timeMaxAll = encodeURIComponent(oneYearAfter.toISOString());
+
+                const allUrl = `${API_BASE}/api/calendar/events?timeMin=${timeMinAll}&timeMax=${timeMaxAll}`;
+                const allRes = await fetch(allUrl, {
+                    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
+                });
+
+                let allEvents = [];
+                if (allRes.ok) {
+                    allEvents = await allRes.json();
+                }
+                allEventsCache = Array.isArray(allEvents) ? allEvents : [];
+
+                // Fetch calendar grid events: full weeks covering the visible month
+                // Start from Monday of the week containing the 1st of the month
+                // End on Sunday of the week containing the last day of the month
+                const year = currentViewDate.getFullYear();
+                const month = currentViewDate.getMonth();
+                const firstOfMonth = new Date(year, month, 1);
+                const lastOfMonth = new Date(year, month + 1, 0);
+
+                const gridStart = getMonday(firstOfMonth);
+                // Sunday = Monday + 6 days, then set to end of day
+                const gridEndSunday = new Date(getMonday(lastOfMonth));
+                gridEndSunday.setDate(gridEndSunday.getDate() + 6);
+                gridEndSunday.setHours(23, 59, 59, 999);
+
+                const timeMinGrid = encodeURIComponent(gridStart.toISOString());
+                const timeMaxGrid = encodeURIComponent(gridEndSunday.toISOString());
+
+                const calUrl = `${API_BASE}/api/calendar/events?timeMin=${timeMinGrid}&timeMax=${timeMaxGrid}`;
+                const calRes = await fetch(calUrl, {
+                    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
+                });
+
+                let gridEvents = [];
+                if (calRes.ok) {
+                    gridEvents = await calRes.json();
+                }
+                gridEvents = Array.isArray(gridEvents) ? gridEvents : [];
+
+                const el = document.getElementById("api-response-calendar");
+                if (el) el.textContent = `Total: ${allEventsCache.length}, Grid: ${gridEvents.length}`;
+
+                renderTaskList(allEventsCache);
+                renderCalendarGrid(currentViewDate, gridEvents);
+
+            } catch (err) {
+                console.error(err);
+                const el = document.getElementById("api-response-calendar");
+                if (el) el.textContent = `Error: ${err.message}`;
+            }
+        }
+
+        // --- RENDER: LEFT TASK LIST (backend order preserved) ---
+        function renderTaskList(events) {
+            const list = document.getElementById('task-list');
+            const addBtn = document.getElementById('add-task-btn');
+
+            list.innerHTML = '';
+            list.appendChild(addBtn);
+
+            events.forEach(ev => {
+                const item = document.createElement('div');
+                item.className = 'bg-white border border-gray-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer group';
+                item.onclick = () => openEditModal(ev);
+
+                const row = document.createElement('div');
+                row.className = 'flex items-start space-x-3';
+
+                const check = document.createElement('input');
+                check.type = 'checkbox';
+                check.className = 'mt-1 rounded text-indigo-600 focus:ring-indigo-500';
+                check.onclick = (e) => e.stopPropagation();
+
+                const content = document.createElement('div');
+                content.className = 'flex-1 min-w-0';
+
+                const title = document.createElement('p');
+                title.className = 'text-sm font-medium text-gray-800 truncate group-hover:text-indigo-600';
+                title.textContent = ev.summary || 'Untitled';
+
+                const sub = document.createElement('p');
+                sub.className = 'text-xs text-gray-400 mt-0.5';
+                const d = ev.allDay ? new Date(`${ev.startDateTime.slice(0, 10)}T12:00:00`) : new Date(ev.startDateTime);
+                sub.textContent = isNaN(d) ? '' : `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${ev.allDay ? ' · All day' : ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+
+                content.append(title, sub);
+                row.append(check, content);
+                item.append(row);
+                list.appendChild(item);
+            });
+        }
+
+        // --- RENDER: CALENDAR GRID (full weeks) ---
+        function renderCalendarGrid(date, events) {
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = '';
+
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            const firstOfMonth = new Date(year, month, 1);
+            const lastOfMonth = new Date(year, month + 1, 0);
+
+            // Grid starts on Monday of the week containing the 1st
+            const gridStartDate = getMonday(firstOfMonth);
+
+            // Grid ends on Sunday of the week containing the last day
+            const gridEndMonday = getMonday(lastOfMonth);
+            const totalDays = Math.round((gridEndMonday - gridStartDate) / (1000 * 60 * 60 * 24)) + 7;
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            for (let i = 0; i < totalDays; i++) {
+                const cellDate = new Date(gridStartDate);
+                cellDate.setDate(gridStartDate.getDate() + i);
+                cellDate.setHours(0, 0, 0, 0);
+
+                const isCurrentMonth = cellDate.getMonth() === month;
+
+                // FIX: Compare using date-only strings to avoid timezone shift bug
+                const cellDateStr = localDateKey(cellDate);
+                const dayEvents = events.filter(ev => {
+                    const evDateStr = eventDayKey(ev);
+                    return evDateStr === cellDateStr;
+                });
+
+                createCell(grid, cellDate.getDate(), !isCurrentMonth, cellDate, dayEvents, today);
+            }
+        }
+
+        function createCell(container, dayNum, isMuted, dateObj, events, today) {
+            const cell = document.createElement('div');
+            cell.className = `grid-cell bg-gray-50 rounded-lg border border-gray-100 p-2 relative group ${isMuted ? 'opacity-40 bg-gray-100' : 'hover:border-indigo-300 cursor-pointer'}`;
+
+            if (!isMuted && dateObj) {
+                cell.onclick = () => openCreateModalWithDate(dateObj);
+            }
+
+            if (!isMuted && dateObj) {
+                cell.ondragover = (e) => { e.preventDefault(); cell.classList.add('drag-over'); };
+                cell.ondragleave = () => cell.classList.remove('drag-over');
+                cell.ondrop = (e) => handleDrop(e, dateObj, cell);
+            }
+
+            const label = document.createElement('span');
+            label.className = `text-xs font-bold absolute top-1 right-2 ${isMuted ? 'text-gray-400' : 'text-gray-500'}`;
+
+            // Highlight today
+            if (!isMuted && dateObj) {
+                const dateOnly = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+                const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                if (dateOnly.getTime() === todayOnly.getTime()) {
+                    label.className = 'text-xs font-bold absolute top-1 right-2 text-white bg-indigo-600 rounded-full w-6 h-6 flex items-center justify-center';
+                }
+            }
+            label.textContent = dayNum;
+            cell.appendChild(label);
+
+            if (!isMuted && events.length > 0) {
+                const wrap = document.createElement('div');
+                wrap.className = 'scrollable-cell mt-6 space-y-1 pr-1';
+
+                events.forEach(ev => {
+                    const chip = document.createElement('div');
+                    chip.className = 'text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-1 rounded truncate cursor-move hover:bg-indigo-200 border-l-2 border-indigo-500 select-none';
+                    chip.textContent = ev.summary || 'Event';
+                    chip.draggable = true;
+
+                    chip.ondragstart = (e) => {
+                        e.dataTransfer.setData('text/plain', JSON.stringify(ev));
+                        chip.classList.add('dragging');
+                    };
+                    chip.ondragend = () => chip.classList.remove('dragging');
+
+                    chip.onclick = (e) => { e.stopPropagation(); openEditModal(ev); };
+
+                    wrap.appendChild(chip);
+                });
+                cell.appendChild(wrap);
+            } else if (!isMuted) {
+                const spacer = document.createElement('div');
+                spacer.className = 'mt-6 flex-1';
+                cell.appendChild(spacer);
+            }
+
+            container.appendChild(cell);
+        }
+
+        // --- DRAG & DROP ---
+        async function handleDrop(e, targetDate, cellElement) {
+            e.preventDefault();
+            e.stopPropagation();
+            cellElement.classList.remove('drag-over');
+
+            const data = e.dataTransfer.getData('text/plain');
+            if (!data) return;
+
+            try {
+                const ev = JSON.parse(data);
+                const payload = moveEvent(ev, targetDate);
+
+                const res = await fetch(`${API_BASE}/api/calendar/events/${ev.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    fetchAllData();
+                } else {
+                    alert('Error moving task');
+                }
+            } catch (err) {
+                console.error('Drop failed', err);
+                alert('Could not move the event. Please try again.');
+            }
+        }
+
+        // --- NAVIGATION ---
+        const monthDisplay = document.getElementById('current-month-display');
+
+        function updateMonthDisplay() {
+            const txt = currentViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            monthDisplay.textContent = txt;
+        }
+
+        document.getElementById('btn-prev-month').onclick = () => {
+            currentViewDate.setMonth(currentViewDate.getMonth() - 1);
+            updateMonthDisplay();
+            fetchAllData();
+        };
+        document.getElementById('btn-next-month').onclick = () => {
+            currentViewDate.setMonth(currentViewDate.getMonth() + 1);
+            updateMonthDisplay();
+            fetchAllData();
+        };
+        document.getElementById('btn-today').onclick = () => {
+            currentViewDate = new Date();
+            updateMonthDisplay();
+            fetchAllData();
+        };
+
+        updateMonthDisplay();
+
+        // --- ALL-DAY TOGGLE VISUAL EFFECT ---
+        function toggleAllDayUI(isChecked, startTimeWrap, endTimeWrap) {
+            if (isChecked) {
+                startTimeWrap.classList.add('allday-disabled');
+                endTimeWrap.classList.add('allday-disabled');
+            } else {
+                startTimeWrap.classList.remove('allday-disabled');
+                endTimeWrap.classList.remove('allday-disabled');
+            }
+        }
+
+        // --- CREATE MODAL ---
+        const createModal = document.getElementById('create-modal');
+        const createAlldayCheckbox = document.getElementById('create-allday');
+        const createStartTimeWrap = document.getElementById('create-start-time-wrap');
+        const createEndTimeWrap = document.getElementById('create-end-time-wrap');
+
+        createAlldayCheckbox.addEventListener('change', () => {
+            toggleAllDayUI(createAlldayCheckbox.checked, createStartTimeWrap, createEndTimeWrap);
+        });
+
+        function openCreateModalWithDate(dateObj) {
+            createModal.classList.remove('hidden');
+
+            createAlldayCheckbox.checked = true;
+            toggleAllDayUI(true, createStartTimeWrap, createEndTimeWrap);
+
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            document.getElementById('create-start-date').value = `${y}-${m}-${d}`;
+            document.getElementById('create-end-date').value = `${y}-${m}-${d}`;
+            document.getElementById('create-start-time').value = '00:00';
+            document.getElementById('create-end-time').value = '23:59';
+
+            document.getElementById('create-summary').value = '';
+            document.getElementById('create-desc').value = '';
+        }
+
+        function openCreateModalDefault() {
+            createModal.classList.remove('hidden');
+
+            createAlldayCheckbox.checked = true;
+            toggleAllDayUI(true, createStartTimeWrap, createEndTimeWrap);
+
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            document.getElementById('create-start-date').value = `${y}-${m}-${d}`;
+            document.getElementById('create-end-date').value = `${y}-${m}-${d}`;
+            document.getElementById('create-start-time').value = '00:00';
+            document.getElementById('create-end-time').value = '23:59';
+
+            document.getElementById('create-summary').value = '';
+            document.getElementById('create-desc').value = '';
+        }
+
+        document.getElementById('add-task-btn').onclick = openCreateModalDefault;
+        document.getElementById('cancel-create-btn').onclick = () => createModal.classList.add('hidden');
+
+        document.getElementById('confirm-create-btn').onclick = async () => {
+            const startDate = document.getElementById('create-start-date').value;
+            const startTime = document.getElementById('create-start-time').value || '00:00';
+            const endDate = document.getElementById('create-end-date').value;
+            const endTime = document.getElementById('create-end-time').value || '23:59';
+
+            const payload = {
+                summary: document.getElementById('create-summary').value,
+                description: document.getElementById('create-desc').value,
+                ...formEventDates(startDate, startTime, endDate, endTime, createAlldayCheckbox.checked),
+                allDay: createAlldayCheckbox.checked
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/api/calendar/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    createModal.classList.add('hidden');
+                    fetchAllData();
+                } else {
+                    alert('Error creating task');
+                }
+            } catch (e) { console.error(e); }
+        };
+
+        // --- EDIT MODAL ---
+        const editModal = document.getElementById('edit-modal');
+        const editAlldayCheckbox = document.getElementById('edit-allday');
+        const editStartTimeWrap = document.getElementById('edit-start-time-wrap');
+        const editEndTimeWrap = document.getElementById('edit-end-time-wrap');
+
+        editAlldayCheckbox.addEventListener('change', () => {
+            toggleAllDayUI(editAlldayCheckbox.checked, editStartTimeWrap, editEndTimeWrap);
+        });
+
+        function openEditModal(task) {
+            document.getElementById('edit-id').value = task.id;
+            document.getElementById('edit-summary').value = task.summary || '';
+            document.getElementById('edit-desc').value = task.description || '';
+            editAlldayCheckbox.checked = task.allDay || false;
+            toggleAllDayUI(editAlldayCheckbox.checked, editStartTimeWrap, editEndTimeWrap);
+
+            if (task.startDateTime) {
+                document.getElementById('edit-start-date').value = eventInputDate(task.startDateTime, task.allDay);
+                document.getElementById('edit-start-time').value = eventInputTime(task.startDateTime, task.allDay);
+            }
+            if (task.endDateTime) {
+                document.getElementById('edit-end-date').value = task.allDay ? new Date(Date.parse(task.endDateTime.slice(0, 10) + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10) : eventInputDate(task.endDateTime, false);
+                document.getElementById('edit-end-time').value = eventInputTime(task.endDateTime, task.allDay);
+            }
+
+            editModal.classList.remove('hidden');
+        }
+
+        document.getElementById('cancel-edit-btn').onclick = () => editModal.classList.add('hidden');
+
+        document.getElementById('save-edit-btn').onclick = async () => {
+            const id = document.getElementById('edit-id').value;
+            const startDate = document.getElementById('edit-start-date').value;
+            const startTime = document.getElementById('edit-start-time').value || '00:00';
+            const endDate = document.getElementById('edit-end-date').value;
+            const endTime = document.getElementById('edit-end-time').value || '23:59';
+
+            const payload = {
+                id: id,
+                summary: document.getElementById('edit-summary').value,
+                description: document.getElementById('edit-desc').value,
+                ...formEventDates(startDate, startTime, endDate, endTime, editAlldayCheckbox.checked),
+                allDay: editAlldayCheckbox.checked
+            };
+
+            try {
+                const res = await fetch(`${API_BASE}/api/calendar/events/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    editModal.classList.add('hidden');
+                    fetchAllData();
+                } else {
+                    alert('Error updating task');
+                }
+            } catch (e) { console.error(e); }
+        };
+
+        document.getElementById('delete-task-btn').onclick = async () => {
+            const id = document.getElementById('edit-id').value;
+            if (!confirm('Are you sure you want to delete this task?')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/calendar/events/${id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                if (res.ok) {
+                    editModal.classList.add('hidden');
+                    fetchAllData();
+                } else {
+                    alert('Error deleting task');
+                }
+            } catch (e) { console.error(e); }
+        };
+
+        // --- BOILERPLATE ---
+        document.getElementById("signOut").onclick = () => signOutRedirect();
+
+        const btnG = document.getElementById('btn-google');
+        const btnM = document.getElementById('btn-myDB');
+        const providerStatus = document.createElement('span');
+        providerStatus.className = 'text-xs text-gray-500';
+        btnM.parentElement.appendChild(providerStatus);
+        function showProvider(provider) {
+            const google = provider === 'GOOGLE';
+            btnG.className = google ? "px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm" : "px-3 py-1 text-xs font-medium rounded-full text-gray-500 hover:text-indigo-600";
+            btnM.className = !google ? "px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm" : "px-3 py-1 text-xs font-medium rounded-full text-gray-500 hover:text-indigo-600";
+            providerStatus.textContent = provider;
+        }
+        async function refreshProvider() {
+            const response = await fetch(`${API_BASE}/api/calendar/provider`, { headers: { Authorization: `Bearer ${accessToken}` } });
+            if (!response.ok) throw new Error('Could not load calendar provider');
+            showProvider(await response.json());
+        }
+        async function switchProv(provider) {
+            try {
+                const response = await fetch(`${API_BASE}/api/calendar/provider?provider=${provider}`, { method: 'PUT', headers: { Authorization: `Bearer ${accessToken}` } });
+                if (!response.ok) throw new Error('Could not switch calendar provider');
+                await refreshProvider();
+                await fetchAllData();
+            } catch (error) { providerStatus.textContent = `Error: ${error.message}`; }
+        }
+        btnG.onclick = () => switchProv('GOOGLE');
+        btnM.onclick = () => switchProv('LOCAL');
+
+        const botMessages = document.getElementById('bot-messages');
+        const botInput = document.getElementById('bot-request');
+        const botSend = document.getElementById('bot-send');
+        const botClear = document.getElementById('bot-clear-history');
+        const botPreferences = document.getElementById('bot-preferences');
+        const botQuotaDisplay = document.getElementById('bot-quota');
+        const botQuotaMessage = document.getElementById('bot-quota-message');
+        const historyKey = `taskai.bot.history.${user.profile.sub || user.profile.email || 'user'}`;
+        const preferencesKey = `taskai.bot.preferences.${user.profile.sub || user.profile.email || 'user'}`;
+        let activeProposal = null;
+        let historyStorageError = false;
+        let botQuota = null;
+        let botBusy = false;
+
+        function updateQuota(quota) {
+            botQuota = quota;
+            const view = quotaView(quota);
+            botQuotaDisplay.textContent = view.label;
+            botQuotaMessage.classList.toggle('hidden', !view.exhausted);
+            botSend.disabled = botBusy || view.exhausted;
+        }
+
+        function loadHistory() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(historyKey) || '[]');
+                if (!Array.isArray(saved)) return [];
+                return saved.filter(item => item && ['USER', 'ASSISTANT'].includes(item.role)
+                    && typeof item.content === 'string' && item.content.trim()
+                    && (!item.actions || Array.isArray(item.actions))).slice(-40);
+            } catch {
+                historyStorageError = true;
+                return [];
+            }
+        }
+        function saveHistory() {
+            try {
+                localStorage.setItem(historyKey, JSON.stringify(botSession.history));
+                historyStorageError = false;
+            }
+            catch { historyStorageError = true; }
+        }
+        try { botPreferences.value = localStorage.getItem(preferencesKey) || ''; } catch { /* Storage is optional. */ }
+        botPreferences.oninput = () => {
+            try { localStorage.setItem(preferencesKey, botPreferences.value); } catch { /* Storage is optional. */ }
+        };
+
+        async function apiError(response, fallback) {
+            const body = await response.json().catch(() => ({}));
+            const error = new Error(`${body.layer || 'Spring Boot'}: ${body.error || fallback}`);
+            error.code = body.code;
+            return error;
+        }
+        async function refreshQuota() {
+            const response = await fetch(`${API_BASE}/api/agent/quota`, {
+                headers: { Authorization: `Bearer ${accessToken}` }
+            });
+            if (!response.ok) throw await apiError(response, 'Could not load AI request quota.');
+            updateQuota(await response.json());
+        }
+        const botSession = new BotSession(
+            async (preferences, request, history) => {
+                const response = await fetch(`${API_BASE}/api/agent/plan`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                    body: JSON.stringify({ preferences, request, history })
+                });
+                if (!response.ok) throw await apiError(response, 'My Bot could not answer.');
+                return response.json();
+            },
+            async actions => {
+                const response = await fetch(`${API_BASE}/api/agent/execute`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                    body: JSON.stringify({ actions })
+                });
+                if (!response.ok) throw await apiError(response, 'Could not apply changes.');
+                return response.json();
+            },
+            loadHistory()
+        );
+
+        function botMessage(role, message, error = false, actions = []) {
+            const row = document.createElement('div');
+            row.className = `flex ${role === 'USER' ? 'justify-end' : 'justify-start'}`;
+            const bubble = document.createElement('div');
+            bubble.className = `max-w-[92%] rounded-xl px-3 py-2 break-words ${error
+                ? 'bg-red-50 text-red-800 border border-red-200'
+                : role === 'USER' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'}`;
+            const label = document.createElement('div');
+            label.className = 'text-[11px] font-semibold mb-1 opacity-70';
+            label.textContent = role === 'USER' ? 'You' : 'My Bot';
+            const content = document.createElement('div');
+            content.className = 'whitespace-pre-wrap';
+            content.textContent = message;
+            bubble.append(label, content);
+            if (actions.length) {
+                const list = document.createElement('ul');
+                list.className = 'mt-2 space-y-1 border-t border-gray-300 pt-2 text-xs';
+                actions.forEach((action, index) => {
+                    const item = document.createElement('li');
+                    const name = action.summary || action.eventId || `Action ${index + 1}`;
+                    item.textContent = `${index + 1}. ${action.type.replace('_EVENT', '').toLowerCase()} ${name}${action.startDateTime ? ' · ' + action.startDateTime : ''}`;
+                    list.appendChild(item);
+                });
+                bubble.appendChild(list);
+            }
+            row.appendChild(bubble);
+            botMessages.appendChild(row);
+            botMessages.scrollTop = botMessages.scrollHeight;
+            return content;
+        }
+        function renderHistory() {
+            botMessages.replaceChildren();
+            if (!botSession.history.length) {
+                const hint = document.createElement('p');
+                hint.className = 'text-sm text-gray-500 text-center px-4 py-8';
+                hint.textContent = 'Ask about your calendar or request a plan. Proposed changes always need your approval.';
+                botMessages.appendChild(hint);
+            } else {
+                botSession.history.forEach(item => botMessage(item.role, item.content, false, item.actions || []));
+            }
+            if (historyStorageError) botMessage('ASSISTANT', 'Frontend: Conversation history could not be saved on this device.', true);
+        }
+        renderHistory();
+
+        function showProposal(actions) {
+            const proposal = document.createElement('div');
+            activeProposal = proposal;
+            proposal.className = 'rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-gray-700 space-y-2';
+            const heading = document.createElement('strong');
+            heading.className = 'block text-indigo-800';
+            heading.textContent = `${actions.length} proposed calendar ${actions.length === 1 ? 'change' : 'changes'}`;
+            const note = document.createElement('p');
+            note.textContent = 'Nothing changes until you choose Apply.';
+            const buttons = document.createElement('div');
+            buttons.className = 'flex gap-2 pt-1';
+            const apply = document.createElement('button');
+            apply.type = 'button';
+            apply.className = 'rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50';
+            apply.textContent = 'Apply changes';
+            const dismiss = document.createElement('button');
+            dismiss.type = 'button';
+            dismiss.className = 'rounded-md border border-gray-300 bg-white px-3 py-1.5 font-medium hover:bg-gray-50';
+            dismiss.textContent = 'Dismiss';
+            dismiss.onclick = () => {
+                botSession.dismiss();
+                activeProposal = null;
+                saveHistory();
+                renderHistory();
+            };
+            apply.onclick = async () => {
+                if (botSession.pendingActions !== actions) return;
+                apply.disabled = true;
+                dismiss.disabled = true;
+                botClear.disabled = true;
+                const status = botMessage('ASSISTANT', 'Applying changes...');
+                try {
+                    await botSession.confirm(actions);
+                    saveHistory();
+                    renderHistory();
+                    activeProposal = null;
+                    await fetchAllData();
+                } catch (error) {
+                    status.textContent = error.message.includes(':') ? error.message : `Frontend: ${error.message}`;
+                    status.parentElement.classList.add('bg-red-50', 'text-red-800');
+                    apply.disabled = false;
+                    dismiss.disabled = false;
+                } finally { botClear.disabled = false; }
+            };
+            buttons.append(apply, dismiss);
+            proposal.append(heading, note, buttons);
+            botMessages.appendChild(proposal);
+            botMessages.scrollTop = botMessages.scrollHeight;
+        }
+
+        async function sendBotRequest() {
+            const request = botInput.value.trim();
+            if (!request) { botMessage('ASSISTANT', 'Frontend: Enter a request first.', true); return; }
+            if (botQuota?.remaining === 0) {
+                botQuotaMessage.classList.remove('hidden');
+                return;
+            }
+            if (botSend.disabled) return;
+            if (activeProposal) {
+                botSession.dismiss();
+                activeProposal = null;
+                saveHistory();
+                renderHistory();
+            }
+            botBusy = true;
+            botSend.disabled = true;
+            botMessage('USER', request);
+            const status = botMessage('ASSISTANT', 'Thinking...');
+            try {
+                const result = await botSession.propose(botPreferences.value, request);
+                if (result.quota) updateQuota(result.quota);
+                botInput.value = '';
+                saveHistory();
+                renderHistory();
+                if (result.actions.length) showProposal(result.actions);
+            } catch (error) {
+                if (error.message === 'Frontend: Conversation was cleared.') {
+                    renderHistory();
+                } else if (error.code === 'DAILY_AI_LIMIT_REACHED') {
+                    updateQuota({ remaining: 0, limit: botQuota?.limit || 20 });
+                    status.closest('.flex')?.remove();
+                } else {
+                    status.textContent = error.message.startsWith('Could not load calendar provider')
+                        ? `Spring Boot: ${error.message}`
+                        : error.message.includes(':') ? error.message : `Frontend: ${error.message}`;
+                    status.parentElement.classList.add('bg-red-50', 'text-red-800');
+                }
+            } finally {
+                botBusy = false;
+                botSend.disabled = botQuota?.remaining === 0;
+            }
+        }
+        botSend.onclick = sendBotRequest;
+        botInput.onkeydown = event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendBotRequest();
+            }
+        };
+        botClear.onclick = () => {
+            botSession.clearHistory();
+            activeProposal = null;
+            try {
+                localStorage.removeItem(historyKey);
+                historyStorageError = false;
+            }
+            catch { historyStorageError = true; }
+            renderHistory();
+        };
+
+        // Init
+        refreshProvider().catch(error => { providerStatus.textContent = `Error: ${error.message}`; });
+        refreshQuota().catch(error => {
+            botQuotaDisplay.textContent = 'Requests unavailable';
+            console.warn(error.message);
+        });
+        fetchAllData();
+
+        fetch(`${API_BASE}/test/public`).then(r => {
+            document.getElementById("api-response-public").textContent = `HTTP ${r.status}`;
+        }).catch(() => {});
+        fetch(`${API_BASE}/test/private`, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => {
+            document.getElementById("api-response-private").textContent = `HTTP ${r.status}`;
+        }).catch(() => {});
+
+    </script>
 </body>
-
-<script type="module">
-    import { userManager, signOutRedirect } from "./src/main.ts";
-
-    const API_BASE = import.meta.env.VITE_API_BASE;
-    const user = await userManager.getUser();
-
-    if (!user || user.expired) {
-        window.location.replace("/sign-in.html");
-        throw new Error("No authenticated user");
-    }
-
-    const accessToken = user.access_token;
-    
-    try {
-        const res = await fetch(`${API_BASE}/test/public`, {
-            method: "GET",
-            headers: {
-                Accept: "application/json",
-            },
-        });
-
-        const bodyText = await res.text();
-        document.getElementById("api-response-public").textContent =
-            `HTTP ${res.status}\n\n${bodyText}`;
-    } catch (err) {
-        document.getElementById("api-response-public").textContent =
-            `Request failed: ${String(err)}`;
-    }
-
-    try {
-        const res = await fetch(`${API_BASE}/test/private`, {
-            method: "GET",
-            headers: {
-                Authorization: `Bearer ${user.access_token}`,
-                Accept: "application/json",
-            },
-        });
-
-        const bodyText = await res.text();
-        document.getElementById("api-response-private").textContent =
-            `HTTP ${res.status}\n\n${bodyText}`;
-    } catch (err) {
-        document.getElementById("api-response-private").textContent =
-            `Request failed: ${String(err)}`;
-    }
-
-    document.getElementById("signOut").addEventListener("click", async () => {
-        await signOutRedirect();
-    });
-
-    document.getElementById("calendar").addEventListener("click", async () => {
-        try {
-            const res = await fetch(`${API_BASE}/api/google/connect`, {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    Accept: "application/json",
-                },
-                credentials: "include",
-            });
-
-            const data = await res.json();
-            window.location.href = data.redirectUrl;
-        } catch (err) {
-            document.getElementById("api-response-calendar").textContent =
-                `Google connect failed: ${String(err)}`;
-        }
-    });
-
-    document.getElementById("get-events").addEventListener("click", async () => {
-        try {
-            const res = await fetch(`${API_BASE}/api/calendar/events/upcoming`, {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${user.access_token}`,
-                    Accept: "application/json",
-                },
-            });
-
-            const bodyText = await res.text();
-            document.getElementById("api-response-calendar").textContent =
-                `HTTP ${res.status}\n\n${bodyText}`;
-        } catch (err) {
-            document.getElementById("api-response-calendar").textContent =
-                `Request failed: ${String(err)}`;
-        }
-    });
-</script>
-
 </html>
