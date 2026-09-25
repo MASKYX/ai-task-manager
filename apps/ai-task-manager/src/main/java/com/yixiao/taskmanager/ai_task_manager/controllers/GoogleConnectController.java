@@ -1,6 +1,7 @@
 package com.yixiao.taskmanager.ai_task_manager.controllers;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -12,6 +13,9 @@ import java.util.Map;
 @RestController
 public class GoogleConnectController {
 
+    @Value("${app.public-base-url:http://localhost:8080}")
+    private String publicBaseUrl;
+
     @GetMapping("/api/google/connect")
     public Map<String, String> connectGoogle(Authentication authentication,
                                              HttpServletRequest request) {
@@ -22,6 +26,6 @@ public class GoogleConnectController {
         HttpSession session = request.getSession(true);
         session.setAttribute("cognitoSub", cognitoSub);
 
-        return Map.of("redirectUrl", "http://localhost:8080/oauth2/authorization/google");
+        return Map.of("redirectUrl", publicBaseUrl + "/oauth2/authorization/google");
     }
 }

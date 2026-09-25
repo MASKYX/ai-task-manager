@@ -29,6 +29,10 @@ ALTER TABLE public.users
     ALTER COLUMN ai_requests_remaining SET DEFAULT 20,
     ALTER COLUMN ai_requests_remaining SET NOT NULL;
 
+ALTER TABLE public.google_oauth_tokens
+    ALTER COLUMN refresh_token TYPE TEXT,
+    ALTER COLUMN access_token TYPE TEXT;
+
 CREATE TABLE IF NOT EXISTS public.calendar_events (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,

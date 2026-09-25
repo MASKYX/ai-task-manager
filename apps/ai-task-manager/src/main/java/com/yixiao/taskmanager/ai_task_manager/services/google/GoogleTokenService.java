@@ -16,6 +16,7 @@ import java.util.UUID;
 public class GoogleTokenService {
 
     private final GoogleOAuthTokenStore googleOAuthTokenStore;
+    private final GoogleTokenCipher tokenCipher;
 
     private final RestClient restClient;
 
@@ -27,9 +28,11 @@ public class GoogleTokenService {
 
     public GoogleTokenService(
             RestClient.Builder restClientBuilder,
-            GoogleOAuthTokenStore googleOAuthTokenStore
+            GoogleOAuthTokenStore googleOAuthTokenStore,
+            GoogleTokenCipher tokenCipher
     ) {
         this.googleOAuthTokenStore = googleOAuthTokenStore;
+        this.tokenCipher = tokenCipher;
         this.restClient = restClientBuilder
                 .baseUrl("https://oauth2.googleapis.com")
                 .build();
@@ -38,11 +41,16 @@ public class GoogleTokenService {
     public String getAccessToken(UUID userId) {
         GoogleOAuthTokenEntity activeToken = googleOAuthTokenStore.findActiveByUserId(userId)
                 .orElse(null);
-        String accessToken = activeToken != null ? activeToken.getAccessToken() : null;
+        String accessToken = activeToken != null ? tokenCipher.decrypt(activeToken.getAccessToken()) : null;
+        String refreshToken = activeToken != null ? tokenCipher.decrypt(activeToken.getRefreshToken()) : null;
         OffsetDateTime expiresAt = activeToken != null ? activeToken.getExpiresAt() : null;
+        if (activeToken != null && accessToken != null &&
+                (!tokenCipher.isEncrypted(activeToken.getAccessToken())
+                        || !tokenCipher.isEncrypted(activeToken.getRefreshToken()))) {
+            googleOAuthTokenStore.upsertTokens(userId, refreshToken, accessToken, expiresAt, activeToken.getScope());
+        }
 
         if (accessToken == null || (expiresAt != null && expiresAt.isBefore(OffsetDateTime.now()))) {
-            String refreshToken = activeToken != null ? activeToken.getRefreshToken() : null;
             if (refreshToken == null) {
                 throw new IllegalStateException("Google Calendar is not connected for this user");
             }

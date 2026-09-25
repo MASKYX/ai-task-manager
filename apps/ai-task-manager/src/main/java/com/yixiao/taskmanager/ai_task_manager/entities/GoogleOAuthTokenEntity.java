@@ -18,10 +18,10 @@ public class GoogleOAuthTokenEntity {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
-    @Column(name = "refresh_token")
+    @Column(name = "refresh_token", columnDefinition = "text")
     private String refreshToken;
 
-    @Column(name = "access_token")
+    @Column(name = "access_token", columnDefinition = "text")
     private String accessToken;
 
     @Column(name = "expires_at")
@@ -77,6 +77,10 @@ public class GoogleOAuthTokenEntity {
 
     public String getAccessToken() {
         return accessToken;
+    }
+
+    public String getScope() {
+        return scope;
     }
 
     public OffsetDateTime getExpiresAt() {

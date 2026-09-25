@@ -14,9 +14,11 @@ import java.util.UUID;
 public class GoogleOAuthTokenStore {
 
     private final GoogleOAuthTokenRepository googleOAuthTokenRepository;
+    private final GoogleTokenCipher tokenCipher;
 
-    public GoogleOAuthTokenStore(GoogleOAuthTokenRepository googleOAuthTokenRepository) {
+    public GoogleOAuthTokenStore(GoogleOAuthTokenRepository googleOAuthTokenRepository, GoogleTokenCipher tokenCipher) {
         this.googleOAuthTokenRepository = googleOAuthTokenRepository;
+        this.tokenCipher = tokenCipher;
     }
 
     @Transactional(readOnly = true)
@@ -31,10 +33,12 @@ public class GoogleOAuthTokenStore {
             OffsetDateTime expiresAt,
             String scope
     ) {
+        String encryptedRefreshToken = tokenCipher.encrypt(refreshToken);
+        String encryptedAccessToken = tokenCipher.encrypt(accessToken);
         googleOAuthTokenRepository.findById(userId)
                 .ifPresentOrElse(
-                        token -> updateToken(token, refreshToken, accessToken, expiresAt, scope),
-                        () -> createToken(userId, refreshToken, accessToken, expiresAt, scope)
+                        token -> updateToken(token, encryptedRefreshToken, encryptedAccessToken, expiresAt, scope),
+                        () -> createToken(userId, encryptedRefreshToken, encryptedAccessToken, expiresAt, scope)
                 );
     }
 

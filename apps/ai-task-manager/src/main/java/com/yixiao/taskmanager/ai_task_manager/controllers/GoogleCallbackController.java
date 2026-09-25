@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
@@ -21,6 +22,9 @@ import java.util.UUID;
 
 @Controller
 public class GoogleCallbackController {
+
+    @Value("${app.frontend-url:http://localhost:5173/}")
+    private String frontendUrl;
 
     @Autowired
     private OAuth2AuthorizedClientManager authorizedClientManager;
@@ -52,7 +56,6 @@ public class GoogleCallbackController {
 
         OAuth2AccessToken accessToken = authorizedClient.getAccessToken();
         OAuth2RefreshToken refreshToken = authorizedClient.getRefreshToken();
-        if(refreshToken == null){System.out.println("refresh token is null");}
 
         HttpSession session = servletRequest.getSession(false);
         if (session == null) {
@@ -64,6 +67,7 @@ public class GoogleCallbackController {
             throw new IllegalStateException("Cognito sub not found in session");
         }
 
+        session.removeAttribute("cognitoSub");
         UUID userId = userService.getOrCreateUserId(cognitoSub);
 
         OffsetDateTime expiresAt = accessToken.getExpiresAt() != null
@@ -82,8 +86,6 @@ public class GoogleCallbackController {
                 scope
         );
 
-        System.out.println("Google access token saved for user " + userId);
-
-        return "redirect:http://localhost:5173/";
+        return "redirect:" + frontendUrl;
     }
 }
