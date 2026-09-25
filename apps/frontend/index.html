@@ -5,52 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Task Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
-
-        .grid-cell { transition: all 0.2s; display: flex; flex-direction: column; min-height: 100px; }
-        .grid-cell:hover { z-index: 10; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-color: #a5b4fc; }
-
-        .dragging { opacity: 0.5; transform: scale(0.95); }
-        .drag-over { background-color: #eef2ff; border: 2px dashed #6366f1; }
-
-        .scrollable-cell { overflow-y: auto; flex-grow: 1; max-height: 150px; }
-        .bot-panel { width: 360px; min-width: 320px; min-height: 0; flex-shrink: 0; }
-        .bot-transcript { min-height: 0; overflow-y: auto; }
-        @media (max-width: 900px) {
-            #task-sidebar { display: none; }
-            .bot-panel { width: 320px; min-width: 280px; }
-        }
-        @media (max-width: 700px) {
-            #app-main { flex-direction: column; }
-            #calendar-panel { min-height: 45%; }
-            .bot-panel { width: 100%; min-width: 0; height: 55%; border-left: 0; border-top: 1px solid #e5e7eb; }
-        }
-
-        /* All-day visual effect: disabled/dimmed time fields */
-        .allday-disabled {
-            opacity: 0.4;
-            pointer-events: none;
-            background-color: #f3f4f6;
-            position: relative;
-        }
-        .allday-disabled::after {
-            content: 'All day';
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            color: #9ca3af;
-            background: rgba(243,244,246,0.85);
-            border-radius: 0.375rem;
-        }
-    </style>
 </head>
 
 <body class="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
@@ -121,17 +75,6 @@
                 </div>
             </div>
 
-            <!-- Debug panel -->
-            <div class="absolute bottom-4 left-4 right-4 pointer-events-none">
-                <details class="bg-white/90 backdrop-blur rounded-lg shadow-lg border border-gray-200 text-xs pointer-events-auto">
-                    <summary class="p-2 cursor-pointer font-medium text-gray-600 select-none">🛠️ Debug / API Responses</summary>
-                    <div class="p-3 border-t border-gray-100 space-y-2 max-h-40 overflow-y-auto font-mono bg-gray-50">
-                        <div><strong>Public:</strong> <pre id="api-response-public" class="inline">...</pre></div>
-                        <div><strong>Private:</strong> <pre id="api-response-private" class="inline">...</pre></div>
-                        <div><strong>Calendar:</strong> <pre id="api-response-calendar" class="inline">...</pre></div>
-                    </div>
-                </details>
-            </div>
         </section>
 
         <!-- Right side: AI assistant -->
@@ -166,7 +109,6 @@
                 </div>
                 <p class="mt-1 text-[11px] text-gray-400">Enter to send · Shift+Enter for a new line</p>
             </div>
-            <div class="hidden"><button id="calendar">Connect</button><button id="get-events">Get</button></div>
         </aside>
     </main>
 
@@ -370,16 +312,11 @@
                 }
                 gridEvents = Array.isArray(gridEvents) ? gridEvents : [];
 
-                const el = document.getElementById("api-response-calendar");
-                if (el) el.textContent = `Total: ${allEventsCache.length}, Grid: ${gridEvents.length}`;
-
                 renderTaskList(allEventsCache);
                 renderCalendarGrid(currentViewDate, gridEvents);
 
             } catch (err) {
                 console.error(err);
-                const el = document.getElementById("api-response-calendar");
-                if (el) el.textContent = `Error: ${err.message}`;
             }
         }
 
@@ -388,7 +325,7 @@
             const list = document.getElementById('task-list');
             const addBtn = document.getElementById('add-task-btn');
 
-            list.innerHTML = '';
+            list.replaceChildren();
             list.appendChild(addBtn);
 
             events.forEach(ev => {
@@ -426,7 +363,7 @@
         // --- RENDER: CALENDAR GRID (full weeks) ---
         function renderCalendarGrid(date, events) {
             const grid = document.getElementById('calendar-grid');
-            grid.innerHTML = '';
+            grid.replaceChildren();
 
             const year = date.getFullYear();
             const month = date.getMonth();
@@ -1013,13 +950,6 @@
             console.warn(error.message);
         });
         fetchAllData();
-
-        fetch(`${API_BASE}/test/public`).then(r => {
-            document.getElementById("api-response-public").textContent = `HTTP ${r.status}`;
-        }).catch(() => {});
-        fetch(`${API_BASE}/test/private`, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => {
-            document.getElementById("api-response-private").textContent = `HTTP ${r.status}`;
-        }).catch(() => {});
 
     </script>
 </body>

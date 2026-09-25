@@ -1,3 +1,4 @@
+import "./styles.css";
 import { UserManager } from "oidc-client-ts";
 
 const cognitoAuthConfig = {

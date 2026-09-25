@@ -16,7 +16,7 @@
                 await userManager.signinCallback();
                 window.location.replace("/index.html");
             } catch (err) {
-                document.body.innerHTML = `<pre>Login callback failed:\n${String(err)}</pre>`;
+                document.body.textContent = `Login callback failed: ${String(err)}`;
             }
         }
 
