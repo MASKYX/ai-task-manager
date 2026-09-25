@@ -43,14 +43,17 @@ public class AgentService {
     }
 
     public PlanResponse plan(Authentication authentication, PlanRequest request) {
-        if (request == null || blank(request.request())) {
+        if (request == null || blank(request.request()) || request.request().length() > 4000
+                || (request.preferences() != null && request.preferences().length() > 2000)) {
             throw new AgentException(HttpStatus.BAD_REQUEST, "Spring Boot", "Enter a request for My Bot.");
         }
         FastApiRequest payload;
         try {
             List<ChatMessage> history = request.history() == null ? List.of() : request.history();
             if (history.size() > 40 || history.stream().anyMatch(message -> message == null
-                    || message.role() == null || blank(message.content()))) {
+                    || message.role() == null || blank(message.content()) || message.content().length() > 4000)
+                    || history.stream().filter(message -> message != null && message.content() != null)
+                    .mapToInt(message -> message.content().length()).sum() > 16000) {
                 throw new AgentException(HttpStatus.BAD_REQUEST, "Spring Boot", "Invalid conversation history.");
             }
             ZonedDateTime now = ZonedDateTime.now(clock);
@@ -82,7 +85,8 @@ public class AgentService {
         }
         try {
             PlanResponse response = mapper.readValue(json, PlanResponse.class);
-            if (response == null || blank(response.comment()) || response.actions() == null) {
+            if (response == null || blank(response.comment()) || response.comment().length() > 4000
+                    || response.actions() == null) {
                 throw new IllegalArgumentException("Incomplete AI response");
             }
             validateActions(response.actions(), payload.context().events());
@@ -133,12 +137,18 @@ public class AgentService {
     }
 
     private void validateActions(List<CalendarAction> actions, List<CalendarEventDto> events) {
+        if (actions.size() > 20) invalid();
         Set<String> knownIds = new HashSet<>();
         events.forEach(event -> knownIds.add(event.getId()));
         for (CalendarAction action : actions) {
             if (action == null || action.type() == null) {
                 invalid();
             }
+            if ((action.eventId() != null && action.eventId().length() > 1024)
+                    || (action.summary() != null && action.summary().length() > 255)
+                    || (action.description() != null && action.description().length() > 10000)
+                    || (action.startDateTime() != null && action.startDateTime().length() > 64)
+                    || (action.endDateTime() != null && action.endDateTime().length() > 64)) invalid();
             if (action.type() == CalendarAction.Type.CREATE_EVENT) {
                 if (!blank(action.eventId())) invalid();
             } else {

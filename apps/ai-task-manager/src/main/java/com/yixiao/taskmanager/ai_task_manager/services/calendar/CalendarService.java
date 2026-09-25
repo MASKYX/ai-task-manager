@@ -3,11 +3,16 @@ package com.yixiao.taskmanager.ai_task_manager.services.calendar;
 import com.yixiao.taskmanager.ai_task_manager.dto.CalendarEventDto;
 import com.yixiao.taskmanager.ai_task_manager.entities.CalendarProviderType;
 import com.yixiao.taskmanager.ai_task_manager.entities.UserEntity;
+import com.yixiao.taskmanager.ai_task_manager.exception.AgentException;
 import com.yixiao.taskmanager.ai_task_manager.services.UserService;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -43,11 +48,19 @@ public class CalendarService {
             String timeMin,
             String timeMax
     ) {
+        try {
+            OffsetDateTime min = OffsetDateTime.parse(timeMin);
+            OffsetDateTime max = OffsetDateTime.parse(timeMax);
+            if (!max.isAfter(min) || ChronoUnit.DAYS.between(min, max) > 1100) invalidRequest();
+        } catch (RuntimeException ex) {
+            invalidRequest();
+        }
         UserEntity user = getUser(authentication);
         return getProvider(user).getEventsInDateRange(user.getId(), timeMin, timeMax);
     }
 
     public CalendarEventDto createEvent(Authentication authentication, CalendarEventDto calendarEventDto) {
+        validateEvent(calendarEventDto);
         UserEntity user = getUser(authentication);
         return getProvider(user).createEvent(user.getId(), calendarEventDto);
     }
@@ -57,11 +70,14 @@ public class CalendarService {
             String eventId,
             CalendarEventDto calendarEventDto
     ) {
+        validateEventId(eventId);
+        validateEvent(calendarEventDto);
         UserEntity user = getUser(authentication);
         return getProvider(user).updateEvent(user.getId(), eventId, calendarEventDto);
     }
 
     public void deleteEvent(Authentication authentication, String eventId) {
+        validateEventId(eventId);
         UserEntity user = getUser(authentication);
         getProvider(user).deleteEvent(user.getId(), eventId);
     }
@@ -71,6 +87,29 @@ public class CalendarService {
             CalendarProviderType providerType
     ) {
         return userService.updateCalendarProvider(extractCognitoSub(authentication), providerType);
+    }
+
+    private static void validateEvent(CalendarEventDto event) {
+        if (event == null || event.getSummary() == null || event.getSummary().isBlank()
+                || event.getSummary().length() > 255
+                || (event.getDescription() != null && event.getDescription().length() > 10000)) invalidRequest();
+        try {
+            if (event.isAllDay()) {
+                if (!LocalDate.parse(event.getEndDateTime()).isAfter(LocalDate.parse(event.getStartDateTime()))) invalidRequest();
+            } else if (!OffsetDateTime.parse(event.getEndDateTime()).toInstant()
+                    .isAfter(OffsetDateTime.parse(event.getStartDateTime()).toInstant())) invalidRequest();
+        } catch (RuntimeException ex) {
+            invalidRequest();
+        }
+    }
+
+    private static void validateEventId(String eventId) {
+        if (eventId == null || eventId.isBlank() || eventId.length() > 1024
+                || eventId.chars().anyMatch(Character::isISOControl)) invalidRequest();
+    }
+
+    private static void invalidRequest() {
+        throw new AgentException(HttpStatus.BAD_REQUEST, "Spring Boot", "Invalid calendar event or date range.");
     }
 
     private UserEntity getUser(Authentication authentication) {
