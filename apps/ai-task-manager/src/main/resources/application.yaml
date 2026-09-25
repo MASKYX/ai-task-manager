@@ -20,7 +20,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.eu-north-1.amazonaws.com/eu-north-1_7WSR32ZZq}
+          issuer-uri: ${COGNITO_ISSUER_URI}
 
       client:
         registration:
