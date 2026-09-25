@@ -12,4 +12,5 @@ import java.util.List;
 public class GoogleEventsResponse {
 
     private List<GoogleEventDto> items;
+    private String nextPageToken;
 }

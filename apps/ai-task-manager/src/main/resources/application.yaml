@@ -3,15 +3,15 @@ spring:
     name: ai-task-manager
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://aws-1-eu-west-1.pooler.supabase.com:5432/postgres}
-    username: ${DB_USERNAME:postgres.ntgfvbkwpfebwkqaiyyk}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
     open-in-view: false
     properties:
       hibernate.boot.allow_jdbc_metadata_access: false
@@ -31,3 +31,8 @@ spring:
             # redirect-uri: "{baseUrl}/login/oauth2/code/google"
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
             scope: openid, https://www.googleapis.com/auth/calendar
+
+agent:
+  fast-api-url: ${FAST_API_URL:http://localhost:8000}
+  daily-request-limit: ${AI_DAILY_REQUEST_LIMIT:20}
+  time-zone: ${AI_TIME_ZONE:Europe/Madrid}

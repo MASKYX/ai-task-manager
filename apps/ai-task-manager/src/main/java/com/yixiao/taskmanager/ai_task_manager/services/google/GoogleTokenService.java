@@ -1,11 +1,8 @@
 package com.yixiao.taskmanager.ai_task_manager.services.google;
 
 import com.yixiao.taskmanager.ai_task_manager.entities.GoogleOAuthTokenEntity;
-import com.yixiao.taskmanager.ai_task_manager.services.UserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -18,7 +15,6 @@ import java.util.UUID;
 @Service
 public class GoogleTokenService {
 
-    private final UserService userService;
     private final GoogleOAuthTokenStore googleOAuthTokenStore;
 
     private final RestClient restClient;
@@ -31,21 +27,15 @@ public class GoogleTokenService {
 
     public GoogleTokenService(
             RestClient.Builder restClientBuilder,
-            UserService userService,
             GoogleOAuthTokenStore googleOAuthTokenStore
     ) {
-        this.userService = userService;
         this.googleOAuthTokenStore = googleOAuthTokenStore;
         this.restClient = restClientBuilder
                 .baseUrl("https://oauth2.googleapis.com")
                 .build();
     }
 
-    public String getAccessToken(Authentication authentication) {
-        String cognitoSub = extractCognitoSub(authentication);
-
-        UUID userId = userService.getOrCreateUserId(cognitoSub);
-
+    public String getAccessToken(UUID userId) {
         GoogleOAuthTokenEntity activeToken = googleOAuthTokenStore.findActiveByUserId(userId)
                 .orElse(null);
         String accessToken = activeToken != null ? activeToken.getAccessToken() : null;
@@ -53,6 +43,9 @@ public class GoogleTokenService {
 
         if (accessToken == null || (expiresAt != null && expiresAt.isBefore(OffsetDateTime.now()))) {
             String refreshToken = activeToken != null ? activeToken.getRefreshToken() : null;
+            if (refreshToken == null) {
+                throw new IllegalStateException("Google Calendar is not connected for this user");
+            }
             accessToken = refreshAccessToken(userId, refreshToken);
         }
 
@@ -90,10 +83,5 @@ public class GoogleTokenService {
         );
 
         return newAccessToken;
-    }
-
-    private String extractCognitoSub(Authentication authentication) {
-        JwtAuthenticationToken jwtAuthenticationToken = (JwtAuthenticationToken) authentication;
-        return jwtAuthenticationToken.getToken().getClaimAsString("sub");
     }
 }

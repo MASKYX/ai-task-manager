@@ -10,6 +10,7 @@ import org.springframework.web.client.RestClient;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,30 @@ public class GoogleCalendarService {
         this.restClient = restClientBuilder
                 .baseUrl(BASE_URL)
                 .build();
+    }
+
+    public List<CalendarEventDto> getAllEvents(String accessToken) {
+        List<CalendarEventDto> events = new ArrayList<>();
+        String pageToken = null;
+        do {
+            final String currentPageToken = pageToken;
+            GoogleEventsResponse response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/calendars/{calendarId}/events")
+                            .queryParam("singleEvents", true)
+                            .queryParam("maxResults", 2500)
+                            .queryParamIfPresent("pageToken", java.util.Optional.ofNullable(currentPageToken))
+                            .build(PRIMARY_CALENDAR))
+                    .headers(headers -> headers.setBearerAuth(accessToken))
+                    .retrieve().body(GoogleEventsResponse.class);
+            if (response == null) {
+                throw new IllegalStateException("Google Calendar returned an empty event response");
+            }
+            if (response.getItems() != null) {
+                response.getItems().stream().map(this::mapToCalendarEventDto).forEach(events::add);
+            }
+            pageToken = response.getNextPageToken();
+        } while (pageToken != null && !pageToken.isBlank());
+        return events;
     }
 
     public List<CalendarEventDto> getUpcomingEvents(String accessToken) {
