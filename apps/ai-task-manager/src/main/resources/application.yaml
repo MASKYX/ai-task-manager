@@ -1,3 +1,7 @@
+logging:
+  level:
+    org.springframework.web.client: INFO
+
 spring:
   application:
     name: ai-task-manager
@@ -11,7 +15,7 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${HIBERNATE_DDL_AUTO:validate}
     open-in-view: false
     properties:
       hibernate.boot.allow_jdbc_metadata_access: false
@@ -44,6 +48,12 @@ app:
   frontend-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
   frontend-url: ${FRONTEND_URL:http://localhost:5173/}
   public-base-url: ${PUBLIC_BACKEND_URL:http://localhost:8080}
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
 
 agent:
   fast-api-url: ${FAST_API_URL:http://localhost:8000}
