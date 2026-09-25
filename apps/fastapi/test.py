@@ -107,5 +107,20 @@ class PlanningTests(unittest.TestCase):
         self.assertNotIn("secret", error.exception.detail)
 
 
+    def test_oversized_request_is_rejected(self):
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            PlanningRequest.model_validate({
+                **self.request.model_dump(), "request": "x" * 4001
+            })
+
+    @patch("main.genai.Client")
+    def test_unknown_event_id_from_ai_is_rejected(self, client):
+        client.return_value.__enter__.return_value.models.generate_content.return_value.text = (
+            '{"comment":"Delete it","actions":[{"type":"DELETE_EVENT","eventId":"another-user-event"}]}')
+        with self.assertRaises(HTTPException) as error:
+            asyncio.run(plan(self.request))
+        self.assertEqual(error.exception.status_code, 502)
+
 if __name__ == "__main__":
     unittest.main()

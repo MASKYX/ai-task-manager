@@ -199,4 +199,31 @@ class AgentServiceTests {
         assertEquals(2, result.executed());
         verify(calendar, times(2)).createEvent(any(), any());
     }
+
+    @Test
+    void oversizedPromptIsRejectedBeforeQuotaOrAiCall() {
+        assertThrows(AgentException.class,
+                () -> agent.plan(authentication, new PlanRequest("", "x".repeat(4001))));
+        verify(users, never()).consumeAiRequest(any());
+        server.verify();
+    }
+
+    @Test
+    void oversizedActionIsRejectedBeforeCalendarMutation() {
+        CalendarAction oversized = new CalendarAction(CalendarAction.Type.CREATE_EVENT, null,
+                "x".repeat(256), null, "2026-09-22", "2026-09-23", true);
+        assertThrows(AgentException.class,
+                () -> agent.execute(authentication, new ExecuteRequest(List.of(oversized))));
+        verify(calendar, never()).createEvent(any(), any());
+    }
+
+    @Test
+    void aiCommentIsDataAndCannotTriggerCalendarMutation() {
+        String comment = "<script>alert('xss')</script>";
+        server.expect(requestTo("http://localhost:8000/plan"))
+                .andRespond(withSuccess("{\"comment\":\"<script>alert('xss')</script>\",\"actions\":[]}",
+                        MediaType.APPLICATION_JSON));
+        assertEquals(comment, agent.plan(authentication, new PlanRequest("", "Plan")).comment());
+        verify(calendar, never()).createEvent(any(), any());
+    }
 }
