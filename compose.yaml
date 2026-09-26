@@ -1,0 +1,112 @@
+name: ai-task-manager
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/ai-task-manager/src/main/resources/db/calendar-schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - internal
+
+  fastapi:
+    build:
+      context: ./apps/fastapi
+    restart: unless-stopped
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1', 8000), 2); s.close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ./apps/ai-task-manager
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      DB_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      HIBERNATE_DDL_AUTO: validate
+      COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI:?Set COGNITO_ISSUER_URI in .env}
+      COGNITO_APP_CLIENT_ID: ${COGNITO_APP_CLIENT_ID:?Set COGNITO_APP_CLIENT_ID in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:?Set GOOGLE_REDIRECT_URI in .env}
+      GOOGLE_TOKEN_ENCRYPTION_KEY: ${GOOGLE_TOKEN_ENCRYPTION_KEY:?Set GOOGLE_TOKEN_ENCRYPTION_KEY in .env}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
+      FRONTEND_URL: ${FRONTEND_URL:?Set FRONTEND_URL in .env}
+      PUBLIC_BACKEND_URL: ${PUBLIC_BACKEND_URL:?Set PUBLIC_BACKEND_URL in .env}
+      SESSION_COOKIE_SECURE: "true"
+      API_DOCS_ENABLED: "false"
+      FAST_API_URL: http://fastapi:8000
+      AI_DAILY_REQUEST_LIMIT: ${AI_DAILY_REQUEST_LIMIT:-20}
+      AI_TIME_ZONE: ${AI_TIME_ZONE:-Europe/Madrid}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fastapi:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - internal
+      - proxy
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      args:
+        VITE_COGNITO_AUTHORITY: ${COGNITO_ISSUER_URI:?Set COGNITO_ISSUER_URI in .env}
+        VITE_COGNITO_CLIENT_ID: ${COGNITO_APP_CLIENT_ID:?Set COGNITO_APP_CLIENT_ID in .env}
+        VITE_COGNITO_DOMAIN: ${VITE_COGNITO_DOMAIN:?Set VITE_COGNITO_DOMAIN in .env}
+        VITE_REDIRECT_URI: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}/callback.html
+        VITE_POST_LOGOUT_REDIRECT_URI: ${FRONTEND_URL:?Set FRONTEND_URL in .env}
+        VITE_API_BASE: ${PUBLIC_BACKEND_URL:?Set PUBLIC_BACKEND_URL in .env}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8081}:80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - proxy
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+  proxy:
+    name: ai-task-manager-proxy

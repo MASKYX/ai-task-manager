@@ -1,3 +1,22 @@
+CREATE TABLE IF NOT EXISTS public.users (
+    id UUID PRIMARY KEY,
+    cognito_sub VARCHAR(255) NOT NULL UNIQUE,
+    calendar_provider VARCHAR(20) NOT NULL DEFAULT 'LOCAL',
+    updated_at TIMESTAMPTZ NOT NULL,
+    ai_requests_remaining INTEGER NOT NULL DEFAULT 20,
+    ai_quota_date DATE
+);
+
+CREATE TABLE IF NOT EXISTS public.google_oauth_tokens (
+    user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+    refresh_token TEXT,
+    access_token TEXT,
+    expires_at TIMESTAMPTZ,
+    scope VARCHAR(255),
+    revoked_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
 ALTER TABLE public.users
     ADD COLUMN IF NOT EXISTS calendar_provider VARCHAR(20);
 
