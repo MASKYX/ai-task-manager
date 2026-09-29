@@ -10,10 +10,23 @@
     <button id="signIn">Sign In</button>
   </body>
   <script type="module">
-    import { userManager } from "./src/main.ts";
+    import { signInRedirect, userManager } from "./src/main.ts";
 
-    document.getElementById("signIn").addEventListener("click", async () => {
-      await userManager.signinRedirect();
+    const existingUser = await userManager.getUser();
+    if (existingUser && !existingUser.expired) {
+      window.location.replace("/index.html");
+    }
+
+    const signInButton = document.getElementById("signIn");
+    signInButton.addEventListener("click", async () => {
+      signInButton.disabled = true;
+      try {
+        await signInRedirect();
+      } catch (error) {
+        console.error("Sign-in redirect failed", error);
+        signInButton.disabled = false;
+        signInButton.textContent = "Sign In failed. Try again";
+      }
     });
 </script>
 </html>

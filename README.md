@@ -135,7 +135,7 @@ http://localhost:8081/callback.html
 as a callback URL, and:
 
 ```text
-http://localhost:8081/
+http://localhost:8081/sign-in.html
 ```
 
 as a sign-out URL.

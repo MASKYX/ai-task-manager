@@ -9,11 +9,11 @@
     <p>Signing in...</p>
 
     <script type="module">
-        import { userManager } from "./src/main.ts";
+        import { completeSignIn } from "./src/main.ts";
 
         async function handleCallback() {
             try {
-                await userManager.signinCallback();
+                await completeSignIn();
                 window.location.replace("/index.html");
             } catch (err) {
                 document.body.textContent = `Login callback failed: ${String(err)}`;

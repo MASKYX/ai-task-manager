@@ -681,7 +681,10 @@
         };
 
         // --- BOILERPLATE ---
-        document.getElementById("signOut").onclick = () => signOutRedirect();
+        document.getElementById("signOut").onclick = async event => {
+            event.currentTarget.disabled = true;
+            await signOutRedirect();
+        };
 
         const btnG = document.getElementById('btn-google');
         const btnM = document.getElementById('btn-myDB');
