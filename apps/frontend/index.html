@@ -28,10 +28,10 @@
                 <button id="btn-next-month" class="p-1 px-2 hover:bg-gray-200 rounded transition-colors font-bold text-gray-500">&gt;</button>
             </div>
 
-            <!-- View toggle: Default to My DB -->
+            <!-- Calendar provider switch -->
             <div class="flex items-center bg-indigo-50 rounded-full p-1 border border-indigo-100">
                 <button id="btn-google" class="px-3 py-1 text-xs font-medium rounded-full text-gray-500 hover:text-indigo-600">Google</button>
-                <button id="btn-myDB" class="px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm">My DB</button>
+                <button id="btn-local" class="px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm">Local</button>
             </div>
         </div>
 
@@ -334,12 +334,7 @@
                 item.onclick = () => openEditModal(ev);
 
                 const row = document.createElement('div');
-                row.className = 'flex items-start space-x-3';
-
-                const check = document.createElement('input');
-                check.type = 'checkbox';
-                check.className = 'mt-1 rounded text-indigo-600 focus:ring-indigo-500';
-                check.onclick = (e) => e.stopPropagation();
+                row.className = 'flex items-start';
 
                 const content = document.createElement('div');
                 content.className = 'flex-1 min-w-0';
@@ -354,7 +349,7 @@
                 sub.textContent = isNaN(d) ? '' : `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${ev.allDay ? ' · All day' : ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
 
                 content.append(title, sub);
-                row.append(check, content);
+                row.append(content);
                 item.append(row);
                 list.appendChild(item);
             });
@@ -687,15 +682,11 @@
         };
 
         const btnG = document.getElementById('btn-google');
-        const btnM = document.getElementById('btn-myDB');
-        const providerStatus = document.createElement('span');
-        providerStatus.className = 'text-xs text-gray-500';
-        btnM.parentElement.appendChild(providerStatus);
+        const btnLocal = document.getElementById('btn-local');
         function showProvider(provider) {
             const google = provider === 'GOOGLE';
             btnG.className = google ? "px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm" : "px-3 py-1 text-xs font-medium rounded-full text-gray-500 hover:text-indigo-600";
-            btnM.className = !google ? "px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm" : "px-3 py-1 text-xs font-medium rounded-full text-gray-500 hover:text-indigo-600";
-            providerStatus.textContent = provider;
+            btnLocal.className = !google ? "px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm" : "px-3 py-1 text-xs font-medium rounded-full text-gray-500 hover:text-indigo-600";
         }
         async function refreshProvider() {
             const response = await fetch(`${API_BASE}/api/calendar/provider`, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -703,15 +694,23 @@
             showProvider(await response.json());
         }
         async function switchProv(provider) {
+            btnG.disabled = true;
+            btnLocal.disabled = true;
             try {
                 const response = await fetch(`${API_BASE}/api/calendar/provider?provider=${provider}`, { method: 'PUT', headers: { Authorization: `Bearer ${accessToken}` } });
                 if (!response.ok) throw new Error('Could not switch calendar provider');
                 await refreshProvider();
                 await fetchAllData();
-            } catch (error) { providerStatus.textContent = `Error: ${error.message}`; }
+            } catch (error) {
+                console.error(error);
+                window.alert('Could not switch calendar provider. Please try again.');
+            } finally {
+                btnG.disabled = false;
+                btnLocal.disabled = false;
+            }
         }
         btnG.onclick = () => switchProv('GOOGLE');
-        btnM.onclick = () => switchProv('LOCAL');
+        btnLocal.onclick = () => switchProv('LOCAL');
 
         const botMessages = document.getElementById('bot-messages');
         const botInput = document.getElementById('bot-request');
@@ -947,7 +946,10 @@
         };
 
         // Init
-        refreshProvider().catch(error => { providerStatus.textContent = `Error: ${error.message}`; });
+        refreshProvider().catch(error => {
+            console.error(error);
+            window.alert('Could not load the calendar provider. Please refresh the page.');
+        });
         refreshQuota().catch(error => {
             botQuotaDisplay.textContent = 'Requests unavailable';
             console.warn(error.message);

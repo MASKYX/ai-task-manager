@@ -25,7 +25,7 @@ test('proposal requires explicit confirmation before execution', async () => {
     assert.equal(executions, 0);
     assert.equal((await session.confirm(actions)).executed, 1);
     assert.equal(executions, 1);
-    assert.match(session.history.at(-1).content, /Applied: Gym/);
+    assert.equal(session.history.at(-1).content, 'Change applied.');
 });
 
 test('history is passed to the next request and cleared explicitly', async () => {
@@ -74,7 +74,7 @@ test('partial execution result is kept in the conversation', async () => {
     await session.propose('', 'Plan');
     const result = await session.confirm(actions);
     assert.equal(result.failed, 1);
-    assert.match(session.history.at(-1).content, /Failed: Study/);
+    assert.equal(session.history.at(-1).content, '1 change applied. 1 change could not be applied.');
 });
 
 test('dismissal prevents execution and clear cancels in-flight history', async () => {

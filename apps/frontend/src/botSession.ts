@@ -77,12 +77,7 @@ export class BotSession {
         if (this.pendingActions !== actions) throw new Error('Frontend: This proposal is no longer active.');
         const result = await this.executeRequest(actions);
         this.pendingActions = null;
-        const details = result.results.map(item => {
-            const action = actions[item.index];
-            const label = action?.summary || action?.eventId || `Action ${item.index + 1}`;
-            return `${item.success ? 'Applied' : 'Failed'}: ${label}. ${item.message}`;
-        });
-        this.add({ role: 'ASSISTANT', content: [result.message, ...details].join('\n') });
+        this.add({ role: 'ASSISTANT', content: executionMessage(result) });
         return result;
     }
 
@@ -90,4 +85,17 @@ export class BotSession {
         this.history.push(message);
         if (this.history.length > 40) this.history = this.history.slice(-40);
     }
+}
+
+function executionMessage(result: ExecutionResult): string {
+    if (result.failed === 0) {
+        return result.executed === 1 ? 'Change applied.' : 'Changes applied.';
+    }
+    if (result.executed === 0) {
+        return 'No changes were applied. Please try again.';
+    }
+
+    const applied = `${result.executed} ${result.executed === 1 ? 'change' : 'changes'} applied.`;
+    const failed = `${result.failed} ${result.failed === 1 ? 'change could' : 'changes could'} not be applied.`;
+    return `${applied} ${failed}`;
 }
