@@ -1,5 +1,6 @@
 package com.yixiao.taskmanager.ai_task_manager.services.calendar;
 
+import com.yixiao.taskmanager.ai_task_manager.configurations.CurrentUserId;
 import com.yixiao.taskmanager.ai_task_manager.dto.CalendarEventDto;
 import com.yixiao.taskmanager.ai_task_manager.entities.CalendarProviderType;
 import com.yixiao.taskmanager.ai_task_manager.entities.UserEntity;
@@ -7,7 +8,6 @@ import com.yixiao.taskmanager.ai_task_manager.exception.AgentException;
 import com.yixiao.taskmanager.ai_task_manager.services.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -86,7 +86,10 @@ public class CalendarService {
             Authentication authentication,
             CalendarProviderType providerType
     ) {
-        return userService.updateCalendarProvider(extractCognitoSub(authentication), providerType);
+        if (CurrentUserId.isDemo(authentication) && providerType != CalendarProviderType.LOCAL) {
+            throw new AgentException(HttpStatus.FORBIDDEN, "Spring Boot", "Google Calendar is unavailable in the demo.");
+        }
+        return userService.updateCalendarProvider(CurrentUserId.userKey(authentication), providerType);
     }
 
     private static void validateEvent(CalendarEventDto event) {
@@ -113,7 +116,7 @@ public class CalendarService {
     }
 
     private UserEntity getUser(Authentication authentication) {
-        return userService.getOrCreateUser(extractCognitoSub(authentication));
+        return userService.getOrCreateUser(CurrentUserId.userKey(authentication));
     }
 
     private CalendarProvider getProvider(UserEntity user) {
@@ -124,10 +127,4 @@ public class CalendarService {
         return provider;
     }
 
-    private String extractCognitoSub(Authentication authentication) {
-        if (!(authentication instanceof JwtAuthenticationToken jwtAuthenticationToken)) {
-            throw new IllegalStateException("Cognito authentication is required");
-        }
-        return jwtAuthenticationToken.getToken().getClaimAsString("sub");
-    }
 }

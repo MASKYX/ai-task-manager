@@ -64,3 +64,13 @@ CREATE TABLE IF NOT EXISTS public.calendar_events (
 
 CREATE INDEX IF NOT EXISTS idx_calendar_events_user_dates
     ON public.calendar_events (user_id, start_date_time, end_date_time);
+
+CREATE TABLE IF NOT EXISTS public.demo_sessions (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL UNIQUE REFERENCES public.users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_demo_sessions_expires_at
+    ON public.demo_sessions (expires_at);

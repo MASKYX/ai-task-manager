@@ -29,9 +29,9 @@ class CalendarSecurityTests {
         String otherEventId = UUID.randomUUID().toString();
         when(repository.findByIdAndUserId(UUID.fromString(otherEventId), ownUser)).thenReturn(Optional.empty());
         CalendarEventDto replacement = event("<img src=x onerror=alert(1)>", "<script>alert(1)</script>");
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(AgentException.class,
                 () -> provider.updateEvent(ownUser, otherEventId, replacement));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(AgentException.class,
                 () -> provider.deleteEvent(ownUser, otherEventId));
         verify(repository, never()).save(any());
         verify(repository, never()).delete(any());

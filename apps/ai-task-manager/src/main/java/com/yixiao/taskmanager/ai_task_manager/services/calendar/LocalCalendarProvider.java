@@ -3,7 +3,9 @@ package com.yixiao.taskmanager.ai_task_manager.services.calendar;
 import com.yixiao.taskmanager.ai_task_manager.dto.CalendarEventDto;
 import com.yixiao.taskmanager.ai_task_manager.entities.CalendarEventEntity;
 import com.yixiao.taskmanager.ai_task_manager.entities.CalendarProviderType;
+import com.yixiao.taskmanager.ai_task_manager.exception.AgentException;
 import com.yixiao.taskmanager.ai_task_manager.repositories.CalendarEventRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,11 +105,11 @@ public class LocalCalendarProvider implements CalendarProvider {
         try {
             id = UUID.fromString(eventId);
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Local calendar event not found", ex);
+            throw new AgentException(HttpStatus.NOT_FOUND, "Spring Boot", "Event not found.");
         }
 
         return calendarEventRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Local calendar event not found"));
+                .orElseThrow(() -> new AgentException(HttpStatus.NOT_FOUND, "Spring Boot", "Event not found."));
     }
 
     private CalendarEventDto toDto(CalendarEventEntity event) {

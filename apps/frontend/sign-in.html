@@ -2,31 +2,61 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>Sign in · TaskAI</title>
   </head>
-  <body>
-    <button id="signIn">Sign In</button>
-  </body>
-  <script type="module">
-    import { signInRedirect, userManager } from "./src/main.ts";
+  <body class="min-h-screen bg-gray-50 text-gray-800 font-sans flex items-center justify-center p-5">
+    <main class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+      <div class="mb-7">
+        <p class="text-sm font-semibold tracking-wide text-indigo-600">TaskAI</p>
+        <h1 class="mt-2 text-2xl font-bold text-gray-900">Plan your day</h1>
+        <p class="mt-2 text-sm leading-6 text-gray-600">Manage your calendar and try the AI assistant.</p>
+      </div>
+      <div class="space-y-3">
+        <button id="signIn" type="button" class="w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">Sign in</button>
+        <button id="tryDemo" type="button" class="w-full rounded-lg border border-indigo-200 bg-white px-4 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">Try demo</button>
+      </div>
+      <p class="mt-5 text-center text-xs leading-5 text-gray-500">Demo data is temporary and will be lost when you exit or log out. Please avoid creating many demo sessions.</p>
+      <p id="auth-error" role="alert" class="mt-4 hidden text-center text-sm text-red-600"></p>
+    </main>
+    <script type="module">
+      import { getAppSession, signInRedirect, startDemo } from "./src/main.ts";
 
-    const existingUser = await userManager.getUser();
-    if (existingUser && !existingUser.expired) {
-      window.location.replace("/index.html");
-    }
+      if (await getAppSession()) window.location.replace("/index.html");
 
-    const signInButton = document.getElementById("signIn");
-    signInButton.addEventListener("click", async () => {
-      signInButton.disabled = true;
-      try {
-        await signInRedirect();
-      } catch (error) {
-        console.error("Sign-in redirect failed", error);
-        signInButton.disabled = false;
-        signInButton.textContent = "Sign In failed. Try again";
+      const signInButton = document.getElementById("signIn");
+      const demoButton = document.getElementById("tryDemo");
+      const errorMessage = document.getElementById("auth-error");
+
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.classList.remove("hidden");
       }
-    });
-</script>
+
+      signInButton.addEventListener("click", async () => {
+        signInButton.disabled = true;
+        errorMessage.classList.add("hidden");
+        try {
+          await signInRedirect();
+        } catch (error) {
+          console.error("Sign-in redirect failed", error);
+          showError("Sign in could not start. Please try again.");
+          signInButton.disabled = false;
+        }
+      });
+
+      demoButton.addEventListener("click", async () => {
+        demoButton.disabled = true;
+        errorMessage.classList.add("hidden");
+        try {
+          await startDemo();
+          window.location.replace("/index.html");
+        } catch (error) {
+          console.error("Demo start failed", error);
+          showError("The demo could not start. Please try again.");
+          demoButton.disabled = false;
+        }
+      });
+    </script>
+  </body>
 </html>

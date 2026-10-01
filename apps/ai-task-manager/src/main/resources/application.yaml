@@ -12,6 +12,11 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/calendar-schema.sql
+
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:

@@ -1,6 +1,9 @@
 package com.yixiao.taskmanager.ai_task_manager;
 
+import com.yixiao.taskmanager.ai_task_manager.configurations.CurrentUserId;
+import com.yixiao.taskmanager.ai_task_manager.configurations.DemoAuthenticationToken;
 import com.yixiao.taskmanager.ai_task_manager.entities.CalendarProviderType;
+import com.yixiao.taskmanager.ai_task_manager.exception.AgentException;
 import com.yixiao.taskmanager.ai_task_manager.entities.UserEntity;
 import com.yixiao.taskmanager.ai_task_manager.services.UserService;
 import com.yixiao.taskmanager.ai_task_manager.services.calendar.CalendarService;
@@ -12,6 +15,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 class CalendarServiceTests {
@@ -26,5 +30,21 @@ class CalendarServiceTests {
                 .expiresAt(Instant.now().plusSeconds(60)).build();
         CalendarService service = new CalendarService(users, List.of());
         assertEquals(CalendarProviderType.GOOGLE, service.getProviderType(new JwtAuthenticationToken(token)));
+    }
+
+    @Test
+    void demoUsesItsOwnLocalUserAndCannotSwitchToGoogle() {
+        UserService users = mock(UserService.class);
+        DemoAuthenticationToken demo = new DemoAuthenticationToken(java.util.UUID.randomUUID());
+        UserEntity user = new UserEntity("demo:" + demo.getSessionId());
+        when(users.getOrCreateUser("demo:" + demo.getSessionId())).thenReturn(user);
+        CalendarService service = new CalendarService(users, List.of());
+
+        assertEquals(demo.getSessionId().toString(), CurrentUserId.get(demo));
+        assertEquals("demo:" + demo.getSessionId(), CurrentUserId.userKey(demo));
+        assertEquals(CalendarProviderType.LOCAL, service.getProviderType(demo));
+        assertThrows(AgentException.class,
+                () -> service.updateProvider(demo, CalendarProviderType.GOOGLE));
+        verify(users, never()).updateCalendarProvider(anyString(), eq(CalendarProviderType.GOOGLE));
     }
 }

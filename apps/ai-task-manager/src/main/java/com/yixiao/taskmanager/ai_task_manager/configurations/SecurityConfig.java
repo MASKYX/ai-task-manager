@@ -1,6 +1,7 @@
 package com.yixiao.taskmanager.ai_task_manager.configurations;
 
 import org.springframework.beans.factory.annotation.Value;
+import com.yixiao.taskmanager.ai_task_manager.services.DemoSessionService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,6 +21,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -30,14 +32,20 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, OAuth2AuthorizationRequestResolver authorizationRequestResolver) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, OAuth2AuthorizationRequestResolver authorizationRequestResolver,
+                                            DemoSessionService demoSessions,
+                                            @Value("${app.frontend-origin:http://localhost:5173}") String frontendOrigin) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/**").access((authentication, context) ->
+                        .requestMatchers(HttpMethod.POST, "/api/demo/start", "/api/demo/end").permitAll()
+                        .requestMatchers("/api/google/**").access((authentication, context) ->
                                 new AuthorizationDecision(authentication.get() instanceof JwtAuthenticationToken))
+                        .requestMatchers("/api/**").access((authentication, context) ->
+                                new AuthorizationDecision(authentication.get() instanceof JwtAuthenticationToken
+                                        || authentication.get() instanceof DemoAuthenticationToken))
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(o -> o
@@ -47,6 +55,8 @@ public class SecurityConfig {
                         .defaultSuccessUrl("/access-granted", true)
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                .addFilterAfter(new DemoAuthenticationFilter(demoSessions, frontendOrigin),
+                        BearerTokenAuthenticationFilter.class)
                 .build();
     }
 

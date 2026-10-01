@@ -232,24 +232,35 @@
     </div>
 
     <script type="module">
-        import { userManager, signOutRedirect } from "./src/main.ts";
+        import { getAppSession, signOutRedirect } from "./src/main.ts";
         import { localDateKey, eventDayKey, moveEvent, eventInputDate, eventInputTime, formEventDates } from "./src/calendarDates.ts";
         import { BotSession, quotaView } from "./src/botSession.ts";
 
         const API_BASE = import.meta.env.VITE_API_BASE;
-        const user = await userManager.getUser();
-
-        if (user && user.profile) {
-            const emailEl = document.getElementById('user-email');
-            if (emailEl) emailEl.textContent = user.profile.email || user.profile.name || 'User';
-        }
-
-        if (!user || user.expired) {
+        const session = await getAppSession();
+        if (!session) {
             window.location.replace("/sign-in.html");
             throw new Error("No authenticated user");
         }
 
-        const accessToken = user.access_token;
+        const isDemo = session.kind === "demo";
+        const user = isDemo ? null : session.user;
+        const accessToken = user?.access_token;
+        document.getElementById('user-email').textContent = isDemo
+            ? 'Demo session'
+            : user.profile.email || user.profile.name || 'User';
+
+        async function apiFetch(url, options = {}) {
+            const headers = new Headers(options.headers);
+            if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+            const response = await fetch(url, {
+                ...options,
+                headers,
+                credentials: isDemo ? 'include' : 'same-origin'
+            });
+            if (isDemo && response.status === 401) window.location.replace("/sign-in.html");
+            return response;
+        }
 
         // --- STATE ---
         let currentViewDate = new Date();
@@ -274,8 +285,8 @@
                 const timeMaxAll = encodeURIComponent(oneYearAfter.toISOString());
 
                 const allUrl = `${API_BASE}/api/calendar/events?timeMin=${timeMinAll}&timeMax=${timeMaxAll}`;
-                const allRes = await fetch(allUrl, {
-                    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
+                const allRes = await apiFetch(allUrl, {
+                    headers: { Accept: 'application/json' }
                 });
 
                 let allEvents = [];
@@ -302,8 +313,8 @@
                 const timeMaxGrid = encodeURIComponent(gridEndSunday.toISOString());
 
                 const calUrl = `${API_BASE}/api/calendar/events?timeMin=${timeMinGrid}&timeMax=${timeMaxGrid}`;
-                const calRes = await fetch(calUrl, {
-                    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
+                const calRes = await apiFetch(calUrl, {
+                    headers: { Accept: 'application/json' }
                 });
 
                 let gridEvents = [];
@@ -464,9 +475,9 @@
                 const ev = JSON.parse(data);
                 const payload = moveEvent(ev, targetDate);
 
-                const res = await fetch(`${API_BASE}/api/calendar/events/${ev.id}`, {
+                const res = await apiFetch(`${API_BASE}/api/calendar/events/${ev.id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
@@ -582,9 +593,9 @@
             };
 
             try {
-                const res = await fetch(`${API_BASE}/api/calendar/events`, {
+                const res = await apiFetch(`${API_BASE}/api/calendar/events`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
@@ -643,9 +654,9 @@
             };
 
             try {
-                const res = await fetch(`${API_BASE}/api/calendar/events/${id}`, {
+                const res = await apiFetch(`${API_BASE}/api/calendar/events/${id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
@@ -662,9 +673,8 @@
             if (!confirm('Are you sure you want to delete this task?')) return;
 
             try {
-                const res = await fetch(`${API_BASE}/api/calendar/events/${id}`, {
-                    method: 'DELETE',
-                    headers: { Authorization: `Bearer ${accessToken}` }
+                const res = await apiFetch(`${API_BASE}/api/calendar/events/${id}`, {
+                    method: 'DELETE'
                 });
                 if (res.ok) {
                     editModal.classList.add('hidden');
@@ -677,8 +687,15 @@
 
         // --- BOILERPLATE ---
         document.getElementById("signOut").onclick = async event => {
-            event.currentTarget.disabled = true;
-            await signOutRedirect();
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+                await signOutRedirect(isDemo);
+            } catch (error) {
+                console.error("Logout failed", error);
+                window.alert("Could not log out. Please try again.");
+                button.disabled = false;
+            }
         };
 
         const btnG = document.getElementById('btn-google');
@@ -686,10 +703,11 @@
         function showProvider(provider) {
             const google = provider === 'GOOGLE';
             btnG.className = google ? "px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm" : "px-3 py-1 text-xs font-medium rounded-full text-gray-500 hover:text-indigo-600";
+            if (isDemo) btnG.classList.add('hidden');
             btnLocal.className = !google ? "px-3 py-1 text-xs font-medium rounded-full bg-white text-indigo-600 shadow-sm" : "px-3 py-1 text-xs font-medium rounded-full text-gray-500 hover:text-indigo-600";
         }
         async function refreshProvider() {
-            const response = await fetch(`${API_BASE}/api/calendar/provider`, { headers: { Authorization: `Bearer ${accessToken}` } });
+            const response = await apiFetch(`${API_BASE}/api/calendar/provider`);
             if (!response.ok) throw new Error('Could not load calendar provider');
             showProvider(await response.json());
         }
@@ -697,7 +715,7 @@
             btnG.disabled = true;
             btnLocal.disabled = true;
             try {
-                const response = await fetch(`${API_BASE}/api/calendar/provider?provider=${provider}`, { method: 'PUT', headers: { Authorization: `Bearer ${accessToken}` } });
+                const response = await apiFetch(`${API_BASE}/api/calendar/provider?provider=${provider}`, { method: 'PUT' });
                 if (!response.ok) throw new Error('Could not switch calendar provider');
                 await refreshProvider();
                 await fetchAllData();
@@ -705,10 +723,12 @@
                 console.error(error);
                 window.alert('Could not switch calendar provider. Please try again.');
             } finally {
-                btnG.disabled = false;
+                btnG.disabled = isDemo;
                 btnLocal.disabled = false;
             }
         }
+        btnG.disabled = isDemo;
+        if (isDemo) btnG.classList.add('hidden');
         btnG.onclick = () => switchProv('GOOGLE');
         btnLocal.onclick = () => switchProv('LOCAL');
 
@@ -719,8 +739,8 @@
         const botPreferences = document.getElementById('bot-preferences');
         const botQuotaDisplay = document.getElementById('bot-quota');
         const botQuotaMessage = document.getElementById('bot-quota-message');
-        const historyKey = `taskai.bot.history.${user.profile.sub || user.profile.email || 'user'}`;
-        const preferencesKey = `taskai.bot.preferences.${user.profile.sub || user.profile.email || 'user'}`;
+        const historyKey = isDemo ? null : `taskai.bot.history.${user.profile.sub || user.profile.email || 'user'}`;
+        const preferencesKey = isDemo ? null : `taskai.bot.preferences.${user.profile.sub || user.profile.email || 'user'}`;
         let activeProposal = null;
         let historyStorageError = false;
         let botQuota = null;
@@ -735,6 +755,7 @@
         }
 
         function loadHistory() {
+            if (!historyKey) return [];
             try {
                 const saved = JSON.parse(localStorage.getItem(historyKey) || '[]');
                 if (!Array.isArray(saved)) return [];
@@ -747,16 +768,19 @@
             }
         }
         function saveHistory() {
+            if (!historyKey) return;
             try {
                 localStorage.setItem(historyKey, JSON.stringify(botSession.history));
                 historyStorageError = false;
             }
             catch { historyStorageError = true; }
         }
-        try { botPreferences.value = localStorage.getItem(preferencesKey) || ''; } catch { /* Storage is optional. */ }
-        botPreferences.oninput = () => {
-            try { localStorage.setItem(preferencesKey, botPreferences.value); } catch { /* Storage is optional. */ }
-        };
+        if (preferencesKey) {
+            try { botPreferences.value = localStorage.getItem(preferencesKey) || ''; } catch { /* Storage is optional. */ }
+            botPreferences.oninput = () => {
+                try { localStorage.setItem(preferencesKey, botPreferences.value); } catch { /* Storage is optional. */ }
+            };
+        }
 
         async function apiError(response, fallback) {
             const body = await response.json().catch(() => ({}));
@@ -765,24 +789,22 @@
             return error;
         }
         async function refreshQuota() {
-            const response = await fetch(`${API_BASE}/api/agent/quota`, {
-                headers: { Authorization: `Bearer ${accessToken}` }
-            });
+            const response = await apiFetch(`${API_BASE}/api/agent/quota`);
             if (!response.ok) throw await apiError(response, 'Could not load AI request quota.');
             updateQuota(await response.json());
         }
         const botSession = new BotSession(
             async (preferences, request, history) => {
-                const response = await fetch(`${API_BASE}/api/agent/plan`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                const response = await apiFetch(`${API_BASE}/api/agent/plan`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ preferences, request, history })
                 });
                 if (!response.ok) throw await apiError(response, 'My Bot could not answer.');
                 return response.json();
             },
             async actions => {
-                const response = await fetch(`${API_BASE}/api/agent/execute`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                const response = await apiFetch(`${API_BASE}/api/agent/execute`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ actions })
                 });
                 if (!response.ok) throw await apiError(response, 'Could not apply changes.');
@@ -937,11 +959,13 @@
         botClear.onclick = () => {
             botSession.clearHistory();
             activeProposal = null;
-            try {
-                localStorage.removeItem(historyKey);
-                historyStorageError = false;
+            if (historyKey) {
+                try {
+                    localStorage.removeItem(historyKey);
+                    historyStorageError = false;
+                }
+                catch { historyStorageError = true; }
             }
-            catch { historyStorageError = true; }
             renderHistory();
         };
 

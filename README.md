@@ -6,7 +6,7 @@ Users can manage events in a local calendar or connect Google Calendar, then ask
 
 ## Features
 
-- Sign in through Amazon Cognito using OpenID Connect.
+- Sign in through Amazon Cognito or try a one-hour demo with a local calendar.
 - Monthly calendar and task-list views.
 - Create, edit, delete, and reschedule events with drag and drop.
 - Choose between a PostgreSQL-backed local calendar and Google Calendar.
@@ -33,7 +33,7 @@ flowchart LR
 
 ### Frontend
 
-Built with Vite and TypeScript. It renders the calendar and assistant UI, handles Cognito sign-in, and sends authenticated requests to Spring Boot.
+Built with Vite and TypeScript. It renders the calendar and assistant UI, handles Cognito sign-in and demo entry, and sends authenticated requests to Spring Boot.
 
 The production image serves the built frontend with Nginx.
 
@@ -41,7 +41,7 @@ The production image serves the built frontend with Nginx.
 
 Acts as the main application backend.
 
-It validates Cognito access tokens, applies business rules, manages users and calendar providers, and is the only service allowed to execute calendar changes.
+It validates Cognito access tokens or demo cookies, applies business rules, manages users and calendar providers, and is the only service allowed to execute calendar changes.
 
 ### FastAPI
 
@@ -57,7 +57,8 @@ Stores:
 - local calendar events;
 - selected calendar provider;
 - AI quota state;
-- encrypted Google OAuth tokens.
+- encrypted Google OAuth tokens;
+- temporary demo sessions.
 
 ### External services
 
@@ -69,7 +70,7 @@ Stores:
 
 ## AI Calendar Flow
 
-1. The user signs in and selects either the local or Google calendar provider.
+1. The user signs in, or starts a demo using the local calendar. Signed-in users can select the local or Google calendar provider.
 2. The user sends a request to the assistant.
 3. Spring Boot loads the user's calendar events and adds the current date, time, weekday, timezone, preferences, and recent conversation history.
 4. Spring Boot sends this context to FastAPI.
@@ -190,9 +191,9 @@ This stops and removes the containers without deleting the PostgreSQL volume.
 
 ## Security
 
-The API requires Cognito access tokens and validates their issuer, client, token type, and subject.
+The API validates Cognito access tokens by issuer, client, token type, and subject. Demo sessions use secure, HttpOnly cookies and expire after one hour.
 
-Calendar operations are scoped to the authenticated user, including ownership checks for local events.
+Calendar operations are scoped to the authenticated user, including ownership checks for local events. Each demo has separate data that is deleted after expiry or logout.
 
 Google access and refresh tokens are encrypted with AES-256-GCM before being stored.
 

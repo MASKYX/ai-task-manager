@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
@@ -41,12 +43,14 @@ class AgentServiceTests {
     void setUp() {
         calendar = mock(CalendarService.class);
         users = mock(UserService.class);
-        authentication = mock(Authentication.class);
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none").claim("sub", "user-1")
+                .issuedAt(Instant.parse("2026-09-23T12:00:00Z"))
+                .expiresAt(Instant.parse("2026-09-23T13:00:00Z")).build();
+        authentication = new JwtAuthenticationToken(jwt);
         clock = Clock.fixed(Instant.parse("2026-09-23T12:30:00Z"), ZoneId.of("Europe/Madrid"));
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         agent = new AgentService(calendar, users, builder, new ObjectMapper(), clock, "http://localhost:8000");
-        when(authentication.getName()).thenReturn("user-1");
         when(users.consumeAiRequest("user-1"))
                 .thenReturn(new UserService.QuotaConsumption(true, new AiQuota(19, 20)));
         when(calendar.getProviderType(authentication)).thenReturn(CalendarProviderType.LOCAL);

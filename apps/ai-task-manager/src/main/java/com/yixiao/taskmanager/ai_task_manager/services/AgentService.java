@@ -1,5 +1,6 @@
 package com.yixiao.taskmanager.ai_task_manager.services;
 
+import com.yixiao.taskmanager.ai_task_manager.configurations.CurrentUserId;
 import com.yixiao.taskmanager.ai_task_manager.dto.AgentDtos.*;
 import com.yixiao.taskmanager.ai_task_manager.dto.CalendarAction;
 import com.yixiao.taskmanager.ai_task_manager.dto.CalendarEventDto;
@@ -66,7 +67,7 @@ public class AgentService {
         } catch (RuntimeException ex) {
             throw new AgentException(HttpStatus.BAD_GATEWAY, "calendar provider", "Could not read your calendar.");
         }
-        UserService.QuotaConsumption consumption = userService.consumeAiRequest(authentication.getName());
+        UserService.QuotaConsumption consumption = userService.consumeAiRequest(CurrentUserId.userKey(authentication));
         if (!consumption.allowed()) {
             throw new AgentException(HttpStatus.TOO_MANY_REQUESTS, "Spring Boot", "DAILY_AI_LIMIT_REACHED",
                     "Daily AI request limit reached. Requests will be available again after the daily reset.");
@@ -98,7 +99,7 @@ public class AgentService {
     }
 
     public AiQuota getQuota(Authentication authentication) {
-        return userService.getAiQuota(authentication.getName());
+        return userService.getAiQuota(CurrentUserId.userKey(authentication));
     }
 
     public ExecuteResponse execute(Authentication authentication, ExecuteRequest request) {

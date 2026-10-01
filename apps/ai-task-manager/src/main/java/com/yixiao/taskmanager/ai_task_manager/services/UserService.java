@@ -27,48 +27,50 @@ public class UserService {
         this.dailyAiRequestLimit = dailyAiRequestLimit;
     }
 
-    public UUID getOrCreateUserId(String cognitoSub) {
-        return getOrCreateUser(cognitoSub).getId();
+    public UUID getOrCreateUserId(String userKey) {
+        return getOrCreateUser(userKey).getId();
     }
 
-    public UserEntity getOrCreateUser(String cognitoSub) {
-        return userRepository.findByCognitoSub(cognitoSub)
-                .orElseGet(() -> createUser(cognitoSub));
+    public UserEntity getOrCreateUser(String userKey) {
+        return userRepository.findByCognitoSub(userKey)
+                .orElseGet(() -> createRealUser(userKey));
     }
 
     @Transactional
-    public AiQuota getAiQuota(String cognitoSub) {
-        UserEntity user = getUserForQuotaUpdate(cognitoSub);
+    public AiQuota getAiQuota(String userKey) {
+        UserEntity user = getUserForQuotaUpdate(userKey);
         refreshQuota(user);
         return quotaOf(user);
     }
 
     @Transactional
-    public QuotaConsumption consumeAiRequest(String cognitoSub) {
-        UserEntity user = getUserForQuotaUpdate(cognitoSub);
+    public QuotaConsumption consumeAiRequest(String userKey) {
+        UserEntity user = getUserForQuotaUpdate(userKey);
         refreshQuota(user);
         boolean allowed = user.consumeAiRequest();
         return new QuotaConsumption(allowed, quotaOf(user));
     }
 
-    public CalendarProviderType updateCalendarProvider(String cognitoSub, CalendarProviderType calendarProvider) {
-        UserEntity user = getOrCreateUser(cognitoSub);
+    public CalendarProviderType updateCalendarProvider(String userKey, CalendarProviderType calendarProvider) {
+        UserEntity user = getOrCreateUser(userKey);
         user.setCalendarProvider(calendarProvider);
         return userRepository.save(user).getCalendarProvider();
     }
 
-    private UserEntity createUser(String cognitoSub) {
+    private UserEntity createRealUser(String userKey) {
+        // Demo rows are created only when a session starts; never recreate an expired one.
+        if (userKey.startsWith("demo:")) throw new IllegalStateException("Demo session no longer exists");
         try {
-            return userRepository.saveAndFlush(new UserEntity(cognitoSub));
+            return userRepository.saveAndFlush(new UserEntity(userKey));
         } catch (DataIntegrityViolationException ex) {
-            return userRepository.findByCognitoSub(cognitoSub)
+            return userRepository.findByCognitoSub(userKey)
                     .orElseThrow(() -> ex);
         }
     }
 
-    private UserEntity getUserForQuotaUpdate(String cognitoSub) {
-        return userRepository.findForUpdateByCognitoSub(cognitoSub)
-                .orElseGet(() -> createUser(cognitoSub));
+    private UserEntity getUserForQuotaUpdate(String userKey) {
+        return userRepository.findForUpdateByCognitoSub(userKey)
+                .orElseGet(() -> createRealUser(userKey));
     }
 
     private void refreshQuota(UserEntity user) {
