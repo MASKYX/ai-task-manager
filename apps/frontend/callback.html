@@ -1,26 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Callback</title>
+    <meta name="theme-color" content="#eef2ff">
+    <title>Signing in · TaskAI</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 </head>
-<body>
-    <p>Signing in...</p>
 
-    <script type="module">
-        import { completeSignIn } from "./src/main.ts";
+<body class="auth-body">
+    <main class="auth-layout auth-layout--centered">
+        <section class="auth-card auth-card--centered" aria-live="polite">
+            <div class="auth-brand">
+                <span class="brand-mark" data-icon="sparkles"></span>
+                <span class="auth-brand-name">TaskAI</span>
+            </div>
 
-        async function handleCallback() {
-            try {
-                await completeSignIn();
-                window.location.replace("/index.html");
-            } catch (err) {
-                document.body.textContent = `Login callback failed: ${String(err)}`;
-            }
-        }
+            <div id="callback-loading" class="callback-state">
+                <div class="spinner spinner--dark" aria-hidden="true"></div>
+                <h1 class="auth-title">Signing you in…</h1>
+                <p class="auth-copy">This only takes a moment. Please keep this tab open.</p>
+            </div>
 
-        handleCallback();
-    </script>
+            <div id="callback-error" class="callback-state" hidden>
+                <span class="callback-error-icon" data-icon="alert"></span>
+                <h1 class="auth-title">We could not sign you in.</h1>
+                <p class="auth-copy" id="callback-error-message"></p>
+                <a class="btn btn-primary btn-lg" href="/sign-in.html">Back to sign in</a>
+            </div>
+        </section>
+    </main>
+
+    <noscript>
+        <p class="auth-footnote">JavaScript is required to sign in to TaskAI.</p>
+    </noscript>
+    <script type="module" src="/src/callbackPage.ts"></script>
 </body>
+
 </html>

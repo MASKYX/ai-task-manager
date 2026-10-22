@@ -1,101 +1,182 @@
-export type CalendarAction = {
-    type: 'CREATE_EVENT' | 'UPDATE_EVENT' | 'DELETE_EVENT';
-    eventId?: string;
-    summary?: string;
-    description?: string;
-    startDateTime?: string;
-    endDateTime?: string;
-    allDay?: boolean;
-};
+import type {
+    CalendarAction,
+    ChatMessage,
+    ExecutionResult,
+    Proposal,
+} from "./types.ts";
+import { HISTORY_CHARACTER_LIMIT, HISTORY_MESSAGE_LIMIT } from "./types.ts";
 
-export type ChatMessage = {
-    role: 'USER' | 'ASSISTANT';
-    content: string;
-    actions?: CalendarAction[];
-};
-
-export type AiQuota = { remaining: number; limit: number };
-export type Proposal = { comment: string; actions: CalendarAction[]; quota?: AiQuota };
-export function quotaView(quota: AiQuota) {
-    return {
-        label: `${quota.remaining} / ${quota.limit} requests`,
-        exhausted: quota.remaining === 0,
-    };
+export class ConversationClearedError extends Error {
+    constructor() {
+        super("The conversation was cleared.");
+        this.name = "ConversationClearedError";
+    }
 }
-export type ActionResult = { index: number; success: boolean; message: string };
-export type ExecutionResult = {
-    message: string;
-    executed: number;
-    failed: number;
-    results: ActionResult[];
-};
+
+type PlanRequest = (
+    preferences: string,
+    request: string,
+    history: ChatMessage[],
+    signal?: AbortSignal,
+) => Promise<Proposal>;
+
+type ExecuteRequest = (
+    actions: CalendarAction[],
+    signal?: AbortSignal,
+) => Promise<ExecutionResult>;
+
+export function trimHistory(messages: ChatMessage[]): ChatMessage[] {
+    const trimmed: ChatMessage[] = [];
+    let characters = 0;
+
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        if (!message) continue;
+        if (trimmed.length >= HISTORY_MESSAGE_LIMIT) break;
+
+        const nextCharacters = characters + message.content.length;
+        if (trimmed.length > 0 && nextCharacters > HISTORY_CHARACTER_LIMIT) break;
+
+        trimmed.unshift(message);
+        characters = nextCharacters;
+    }
+
+    return trimmed;
+}
+
+function actionName(action: CalendarAction): string {
+    if (action.summary?.trim()) return action.summary.trim();
+    if (action.eventId) return action.eventId;
+    return action.type === "CREATE_EVENT" ? "new event" : "event";
+}
+
+export function executionSummary(result: ExecutionResult, actions: CalendarAction[]): string {
+    const total = result.executed + result.failed;
+    const lines: string[] = [];
+
+    if (result.failed === 0) {
+        lines.push(result.executed === 1 ? "Applied 1 change." : `Applied ${result.executed} changes.`);
+    } else if (result.executed === 0) {
+        lines.push(total === 1 ? "The change could not be applied." : "No changes were applied.");
+    } else {
+        lines.push(`Applied ${result.executed} of ${total} changes.`);
+    }
+
+    for (const item of Array.isArray(result.results) ? result.results : []) {
+        if (item.success) continue;
+        const action = actions[item.index];
+        lines.push(`• ${action ? actionName(action) : "Change"}: ${item.message}`);
+    }
+
+    return lines.join("\n");
+}
 
 export class BotSession {
-    pendingActions: CalendarAction[] | null = null;
-    history: ChatMessage[];
-
-    private readonly planRequest: (preferences: string, request: string, history: ChatMessage[]) => Promise<Proposal>;
-    private readonly executeRequest: (actions: CalendarAction[]) => Promise<ExecutionResult>;
+    private messages: ChatMessage[];
+    private pending: CalendarAction[] | null = null;
     private generation = 0;
 
+    private readonly planRequest: PlanRequest;
+    private readonly executeRequest: ExecuteRequest;
+
     constructor(
-        planRequest: (preferences: string, request: string, history: ChatMessage[]) => Promise<Proposal>,
-        executeRequest: (actions: CalendarAction[]) => Promise<ExecutionResult>,
-        initialHistory: ChatMessage[] = []
+        planRequest: PlanRequest,
+        executeRequest: ExecuteRequest,
+        initialHistory: ChatMessage[] = [],
     ) {
         this.planRequest = planRequest;
         this.executeRequest = executeRequest;
-        this.history = initialHistory.slice(-40);
+        this.messages = trimHistory(initialHistory);
     }
 
-    async propose(preferences: string, request: string): Promise<Proposal> {
+    get history(): ChatMessage[] {
+        return [...this.messages];
+    }
+
+    get pendingActions(): CalendarAction[] | null {
+        return this.pending;
+    }
+
+    async propose(preferences: string, request: string, signal?: AbortSignal): Promise<Proposal> {
+        const text = request.trim();
+        if (!text) throw new Error("Enter a request first.");
+
         this.dismiss();
+        const history = [...this.messages];
         const generation = this.generation;
-        const proposal = await this.planRequest(preferences, request, [...this.history]);
-        if (generation !== this.generation) throw new Error('Frontend: Conversation was cleared.');
-        if (!proposal.comment || !Array.isArray(proposal.actions)) throw new Error('AI response processing: Invalid proposal.');
-        this.pendingActions = proposal.actions.length ? proposal.actions : null;
-        this.add({ role: 'USER', content: request });
-        this.add({ role: 'ASSISTANT', content: proposal.comment, actions: proposal.actions });
-        return proposal;
+        this.add({ role: "USER", content: text });
+
+        try {
+            const proposal = await this.planRequest(preferences.trim(), text, history, signal);
+            if (generation !== this.generation) throw new ConversationClearedError();
+            if (!proposal || typeof proposal.comment !== "string" || !proposal.comment.trim()
+                || !Array.isArray(proposal.actions)) {
+                throw new Error("The assistant returned an invalid proposal. Please try again.");
+            }
+
+            this.pending = proposal.actions.length > 0 ? proposal.actions : null;
+            this.add({
+                role: "ASSISTANT",
+                content: proposal.comment.trim(),
+                actions: proposal.actions,
+            });
+            return proposal;
+        } catch (error) {
+            if (generation === this.generation) this.removeLastUserMessage(text);
+            throw error;
+        }
     }
 
-    dismiss(): void {
-        if (this.pendingActions) {
-            this.add({ role: 'ASSISTANT', content: 'The proposed changes were dismissed.' });
-        }
-        this.pendingActions = null;
+    dismiss(): boolean {
+        if (!this.pending) return false;
+
+        this.pending = null;
+        this.add({ role: "ASSISTANT", content: "The proposed changes were dismissed." });
+        return true;
+    }
+
+    discardPending(): boolean {
+        if (!this.pending) return false;
+        this.pending = null;
+        return true;
+    }
+
+    addNotice(content: string): void {
+        this.add({ role: "ASSISTANT", content });
     }
 
     clearHistory(): void {
-        this.generation++;
-        this.pendingActions = null;
-        this.history = [];
+        this.generation += 1;
+        this.pending = null;
+        this.messages = [];
     }
 
-    async confirm(actions: CalendarAction[]): Promise<ExecutionResult> {
-        if (this.pendingActions !== actions) throw new Error('Frontend: This proposal is no longer active.');
-        const result = await this.executeRequest(actions);
-        this.pendingActions = null;
-        this.add({ role: 'ASSISTANT', content: executionMessage(result) });
+    async confirm(actions: CalendarAction[], signal?: AbortSignal): Promise<ExecutionResult> {
+        if (this.pending !== actions) throw new Error("This proposal is no longer active.");
+
+        const generation = this.generation;
+        const result = await this.executeRequest(actions, signal);
+        if (generation !== this.generation) throw new ConversationClearedError();
+
+        const results = Array.isArray(result.results) ? result.results : [];
+        const failed = results
+            .filter((item) => !item.success)
+            .map((item) => actions[item.index])
+            .filter((action): action is CalendarAction => Boolean(action));
+
+        this.pending = result.failed > 0
+            ? failed.length > 0 ? failed : actions
+            : null;
+        this.add({ role: "ASSISTANT", content: executionSummary(result, actions) });
         return result;
     }
 
     private add(message: ChatMessage): void {
-        this.history.push(message);
-        if (this.history.length > 40) this.history = this.history.slice(-40);
-    }
-}
-
-function executionMessage(result: ExecutionResult): string {
-    if (result.failed === 0) {
-        return result.executed === 1 ? 'Change applied.' : 'Changes applied.';
-    }
-    if (result.executed === 0) {
-        return 'No changes were applied. Please try again.';
+        this.messages = trimHistory([...this.messages, message]);
     }
 
-    const applied = `${result.executed} ${result.executed === 1 ? 'change' : 'changes'} applied.`;
-    const failed = `${result.failed} ${result.failed === 1 ? 'change could' : 'changes could'} not be applied.`;
-    return `${applied} ${failed}`;
+    private removeLastUserMessage(request: string): void {
+        const last = this.messages.at(-1);
+        if (last?.role === "USER" && last.content === request) this.messages.pop();
+    }
 }

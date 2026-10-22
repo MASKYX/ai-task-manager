@@ -1,62 +1,125 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#eef2ff">
+    <meta name="description" content="Sign in to TaskAI and plan your calendar with an assistant that asks before changing anything.">
     <title>Sign in · TaskAI</title>
-  </head>
-  <body class="min-h-screen bg-gray-50 text-gray-800 font-sans flex items-center justify-center p-5">
-    <main class="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-      <div class="mb-7">
-        <p class="text-sm font-semibold tracking-wide text-indigo-600">TaskAI</p>
-        <h1 class="mt-2 text-2xl font-bold text-gray-900">Plan your day</h1>
-        <p class="mt-2 text-sm leading-6 text-gray-600">Manage your calendar and try the AI assistant.</p>
-      </div>
-      <div class="space-y-3">
-        <button id="signIn" type="button" class="w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">Sign in</button>
-        <button id="tryDemo" type="button" class="w-full rounded-lg border border-indigo-200 bg-white px-4 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">Try demo</button>
-      </div>
-      <p class="mt-5 text-center text-xs leading-5 text-gray-500">Demo data is temporary and will be lost when you exit or log out. Please avoid creating many demo sessions.</p>
-      <p id="auth-error" role="alert" class="mt-4 hidden text-center text-sm text-red-600"></p>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+</head>
+
+<body class="auth-body">
+    <main class="auth-layout">
+        <section class="auth-card" aria-labelledby="auth-title">
+            <div class="auth-brand">
+                <span class="brand-mark" data-icon="sparkles"></span>
+                <span class="auth-brand-name">TaskAI</span>
+            </div>
+
+            <p class="eyebrow">Welcome back</p>
+            <h1 id="auth-title" class="auth-title">Plan your day with confidence.</h1>
+            <p class="auth-copy">
+                Keep your calendar in one place and ask the assistant for help. It proposes changes,
+                and nothing happens until you approve them.
+            </p>
+
+            <p id="auth-notice" class="auth-notice" role="status" hidden></p>
+
+            <div id="demo-banner" class="demo-banner" hidden>
+                <div>
+                    <p class="demo-title">Demo session active</p>
+                    <p class="demo-copy">A temporary demo is already open in this browser. You can continue it, or sign in to use your own calendar.</p>
+                </div>
+                <button id="continue-demo" class="btn btn-secondary btn-sm" type="button">Continue demo</button>
+            </div>
+
+            <div class="auth-actions">
+                <button id="sign-in" class="btn btn-primary btn-lg btn-block" type="button">
+                    <span data-icon="user"></span>
+                    Sign in
+                </button>
+                <button id="try-demo" class="btn btn-secondary btn-lg btn-block" type="button">
+                    <span data-icon="sparkles"></span>
+                    Try the demo
+                </button>
+            </div>
+
+            <p id="auth-error" class="auth-error" role="alert" hidden>
+                <span class="auth-error-icon" data-icon="alert"></span>
+                <span id="auth-error-text"></span>
+            </p>
+
+            <ul class="auth-features">
+                <li>
+                    <span class="auth-feature-icon" data-icon="calendar"></span>
+                    <span><strong>A calmer calendar.</strong> See your month at a glance on any screen.</span>
+                </li>
+                <li>
+                    <span class="auth-feature-icon" data-icon="sparkles"></span>
+                    <span><strong>Plans you control.</strong> Review every proposed change before it is applied.</span>
+                </li>
+                <li>
+                    <span class="auth-feature-icon" data-icon="check"></span>
+                    <span><strong>Your choice of source.</strong> Use the local calendar or connect Google.</span>
+                </li>
+            </ul>
+
+            <p class="auth-footnote">
+                Demo data is temporary and disappears when you log out. Please do not create many demo sessions.
+            </p>
+        </section>
+
+        <aside class="auth-preview" aria-hidden="true">
+            <div class="preview-window">
+                <div class="preview-topbar">
+                    <span class="preview-dot"></span>
+                    <span class="preview-dot"></span>
+                    <span class="preview-dot"></span>
+                    <span class="preview-pill">Your month</span>
+                </div>
+                <div class="preview-body">
+                    <div class="preview-calendar">
+                        <div class="preview-weekdays">
+                            <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+                        </div>
+                        <div class="preview-days">
+                            <span></span><span></span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                            <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span>
+                            <span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span>18</span><span>19</span>
+                            <span class="preview-today">20</span><span class="preview-selected">21</span><span>22</span><span>23</span><span>24</span><span>25</span><span>26</span>
+                        </div>
+                        <div class="preview-event">
+                            <span class="preview-event-time">09:30</span>
+                            <span>Design review</span>
+                        </div>
+                    </div>
+                    <div class="preview-assistant">
+                        <div class="preview-assistant-head">
+                            <span class="preview-spark">✦</span>
+                            <span>TaskAI Assistant</span>
+                        </div>
+                        <p class="preview-bubble">I found a free hour tomorrow. Want me to move the review?</p>
+                        <div class="preview-proposal">
+                            <p class="preview-proposal-title">1 proposed change</p>
+                            <p class="preview-proposal-copy">Update “Design review” · 10:00 – 11:00</p>
+                            <div class="preview-buttons">
+                                <span>Dismiss</span>
+                                <span class="preview-apply">Apply</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <p class="preview-caption">A thoughtful assistant. A calendar that stays yours.</p>
+        </aside>
     </main>
-    <script type="module">
-      import { getAppSession, signInRedirect, startDemo } from "./src/main.ts";
 
-      if (await getAppSession()) window.location.replace("/index.html");
+    <noscript>
+        <p class="auth-footnote">JavaScript is required to sign in to TaskAI.</p>
+    </noscript>
+    <script type="module" src="/src/authPage.ts"></script>
+</body>
 
-      const signInButton = document.getElementById("signIn");
-      const demoButton = document.getElementById("tryDemo");
-      const errorMessage = document.getElementById("auth-error");
-
-      function showError(message) {
-        errorMessage.textContent = message;
-        errorMessage.classList.remove("hidden");
-      }
-
-      signInButton.addEventListener("click", async () => {
-        signInButton.disabled = true;
-        errorMessage.classList.add("hidden");
-        try {
-          await signInRedirect();
-        } catch (error) {
-          console.error("Sign-in redirect failed", error);
-          showError("Sign in could not start. Please try again.");
-          signInButton.disabled = false;
-        }
-      });
-
-      demoButton.addEventListener("click", async () => {
-        demoButton.disabled = true;
-        errorMessage.classList.add("hidden");
-        try {
-          await startDemo();
-          window.location.replace("/index.html");
-        } catch (error) {
-          console.error("Demo start failed", error);
-          showError("The demo could not start. Please try again.");
-          demoButton.disabled = false;
-        }
-      });
-    </script>
-  </body>
 </html>
