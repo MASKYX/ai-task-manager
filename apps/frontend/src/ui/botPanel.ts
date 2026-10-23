@@ -381,11 +381,11 @@ export class BotPanel {
 
         welcome.append(
             badge,
-            create("h3", "chat-welcome-title", "How can I help?"),
+            create("h3", "chat-welcome-title", "Plan with the assistant"),
             create(
                 "p",
                 "chat-welcome-copy",
-                "Ask for a plan or a change. I will show you the details before anything is applied.",
+                "Review proposed changes before applying them.",
             ),
             suggestions,
         );

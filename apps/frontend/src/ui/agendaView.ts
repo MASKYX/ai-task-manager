@@ -25,7 +25,6 @@ type AgendaOptions = {
     loading: boolean;
     error: string | null;
     onOpenEvent: (event: CalendarEvent) => void;
-    onAdd: () => void;
     onRetry: () => void;
 };
 
@@ -64,20 +63,14 @@ function eventButton(event: CalendarEvent, onOpen: (event: CalendarEvent) => voi
     return item;
 }
 
-function renderEmpty(onAdd: () => void): HTMLElement {
+function renderEmpty(): HTMLElement {
     const empty = create("div", "empty-state");
     const emptyIcon = create("span", "empty-icon");
     emptyIcon.appendChild(icon("calendar", 24));
-    const button = create("button", "btn btn-secondary btn-sm");
-    button.type = "button";
-    button.append(icon("plus", 16), document.createTextNode("Add an event"));
-    button.addEventListener("click", onAdd);
 
     empty.append(
         emptyIcon,
-        create("h3", "empty-title", "Nothing on the calendar"),
-        create("p", "empty-copy", "When you add an event, it will show up here."),
-        button,
+        create("h3", "empty-title", "No events this month"),
     );
     return empty;
 }
@@ -119,7 +112,7 @@ export function renderAgenda(container: HTMLElement, options: AgendaOptions): vo
 
     const monthEvents = sortEvents(options.events.filter((event) => eventIntersectsMonth(event, options.viewDate)));
     if (monthEvents.length === 0) {
-        container.appendChild(renderEmpty(options.onAdd));
+        container.appendChild(renderEmpty());
         return;
     }
 

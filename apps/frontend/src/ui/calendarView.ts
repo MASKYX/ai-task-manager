@@ -238,7 +238,6 @@ export function renderSelectedDay(
     const head = create("div", "selected-day-head");
     const copy = create("div");
     copy.append(
-        create("p", "eyebrow", "Selected day"),
         create("h3", "selected-day-title", formatDateLong(date)),
     );
     head.append(copy);
@@ -261,8 +260,7 @@ export function renderSelectedDay(
         emptyIcon.appendChild(icon("calendar", 20));
         empty.append(
             emptyIcon,
-            create("p", "empty-title", "Nothing planned"),
-            create("p", "empty-copy", "Enjoy the space, or add something new."),
+            create("p", "empty-title", "No events"),
         );
         container.appendChild(empty);
         return;

@@ -188,7 +188,6 @@ class CalendarApp {
         const accountEmail = query("#account-email");
         const accountInitial = query("#account-initial");
         const menuEmail = query("#account-menu-email");
-        const menuKind = query("#account-menu-kind");
         const sessionBadge = query("#session-badge");
 
         if (this.session.kind === "cognito") {
@@ -197,13 +196,11 @@ class CalendarApp {
             setText(accountEmail, label);
             setText(accountInitial, getUserInitial(user));
             setText(menuEmail, label);
-            setText(menuKind, "Signed in with Cognito");
             sessionBadge.hidden = true;
         } else {
             setText(accountEmail, "Demo session");
             setText(accountInitial, "D");
             setText(menuEmail, "Demo session");
-            setText(menuKind, "Temporary local calendar");
             sessionBadge.hidden = false;
         }
 
@@ -325,8 +322,7 @@ class CalendarApp {
             return;
         }
 
-        const suffix = isMobileLayout() ? "Tap a day to see its schedule." : "Click a day to add an event.";
-        setText(this.calendarSubtitle, `${formatCount(count, "event")} this month · ${suffix}`);
+        setText(this.calendarSubtitle, `${formatCount(count, "event")} this month`);
         setText(this.agendaSubtitle, `${formatMonth(this.viewDate)} · ${formatCount(count, "event")}`);
     }
 
@@ -408,7 +404,6 @@ class CalendarApp {
             loading: this.loading,
             error: this.loadError,
             onOpenEvent: (event) => this.eventDialog.openEdit(event),
-            onAdd: () => this.openCreateForSelectedDay(),
             onRetry: () => void this.loadEvents(),
         });
     }

@@ -14,7 +14,6 @@ const continueDemoButton = query<HTMLButtonElement>("#continue-demo");
 const errorBox = query("#auth-error");
 const errorText = query("#auth-error-text");
 const notice = query("#auth-notice");
-const demoBanner = query("#demo-banner");
 
 let busy = false;
 
@@ -24,22 +23,19 @@ function setError(message: string | null): void {
     if (message) announce(message);
 }
 
-function setWorking(working: boolean): void {
+function setWorking(working: boolean, activeButton: HTMLButtonElement | null = null): void {
     busy = working;
-    setBusy(signInButton, working);
-    setBusy(demoButton, working);
-    signInButton.disabled = working;
-    demoButton.disabled = working;
+    for (const button of [signInButton, demoButton, continueDemoButton]) {
+        setBusy(button, working && button === activeButton);
+        button.disabled = working;
+    }
 }
 
 function showNoticeFromQuery(): void {
     const reason = new URLSearchParams(window.location.search).get("reason");
     if (reason === "expired") {
         notice.hidden = false;
-        setText(notice, "Your session expired. Sign in again to continue where you left off.");
-    } else if (reason === "session") {
-        notice.hidden = false;
-        setText(notice, "Sign in to open your calendar.");
+        setText(notice, "Session expired. Please sign in again.");
     }
 }
 
@@ -53,7 +49,8 @@ async function checkExistingSession(): Promise<void> {
         }
 
         if (await getDemoSession()) {
-            demoBanner.hidden = false;
+            demoButton.hidden = true;
+            continueDemoButton.hidden = false;
         }
     } catch (error) {
         setError(errorMessage(error));
@@ -65,7 +62,7 @@ async function checkExistingSession(): Promise<void> {
 signInButton.addEventListener("click", async () => {
     if (busy) return;
     setError(null);
-    setWorking(true);
+    setWorking(true, signInButton);
     try {
         await signInWithCognito();
     } catch (error) {
@@ -77,7 +74,7 @@ signInButton.addEventListener("click", async () => {
 demoButton.addEventListener("click", async () => {
     if (busy) return;
     setError(null);
-    setWorking(true);
+    setWorking(true, demoButton);
     try {
         await startDemo();
         window.location.replace("/index.html");
@@ -88,6 +85,8 @@ demoButton.addEventListener("click", async () => {
 });
 
 continueDemoButton.addEventListener("click", () => {
+    if (busy) return;
+    setWorking(true, continueDemoButton);
     window.location.replace("/index.html");
 });
 

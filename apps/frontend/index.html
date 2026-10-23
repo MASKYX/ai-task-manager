@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#eef2ff">
-    <meta name="description" content="TaskAI is a calm calendar with an AI assistant that proposes changes you approve.">
+    <meta name="description" content="TaskAI calendar and assistant.">
     <title>TaskAI · Calendar</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 </head>
@@ -19,7 +19,7 @@
         <div class="boot-card">
             <span class="brand-mark brand-mark--lg" data-icon="sparkles"></span>
             <p class="boot-name">TaskAI</p>
-            <p id="boot-message" class="boot-message">Preparing your calendar…</p>
+            <p id="boot-message" class="boot-message">Loading…</p>
             <div id="boot-spinner" class="spinner" aria-hidden="true"></div>
             <div id="boot-error" class="boot-error" hidden>
                 <p id="boot-error-message" class="boot-error-text"></p>
@@ -39,7 +39,6 @@
                 <span class="brand-mark" data-icon="sparkles"></span>
                 <div class="brand-copy">
                     <p class="brand-name">TaskAI</p>
-                    <p class="brand-tagline">Your calendar, planned with care</p>
                 </div>
                 <span id="session-badge" class="session-badge" hidden>Demo</span>
             </div>
@@ -65,11 +64,6 @@
             </div>
 
             <div class="header-actions">
-                <button class="btn btn-primary btn-sm header-add" type="button" data-add-event>
-                    <span data-icon="plus"></span>
-                    New event
-                </button>
-
                 <div class="account">
                     <button id="account-button" class="account-button" type="button" aria-haspopup="menu"
                         aria-expanded="false" aria-controls="account-menu">
@@ -80,7 +74,6 @@
                     <div id="account-menu" class="account-menu" role="menu" hidden>
                         <div class="account-menu-head">
                             <p id="account-menu-email" class="account-menu-email"></p>
-                            <p id="account-menu-kind" class="account-menu-kind"></p>
                         </div>
                         <button id="sign-out" class="account-menu-item" type="button" role="menuitem">
                             <span data-icon="log-out"></span>
@@ -110,13 +103,12 @@
             <aside id="agenda-panel" class="panel agenda-panel" aria-labelledby="agenda-title">
                 <div class="panel-head">
                     <div>
-                        <p class="eyebrow">Month at a glance</p>
                         <h2 id="agenda-title" class="panel-title">Agenda</h2>
                         <p id="agenda-subtitle" class="panel-subtitle">Loading…</p>
                     </div>
-                    <button class="btn btn-secondary btn-sm" type="button" data-add-event aria-label="Add an event">
+                    <button class="btn btn-primary btn-sm agenda-add" type="button" data-add-event>
                         <span data-icon="plus"></span>
-                        New
+                        New event
                     </button>
                 </div>
                 <div id="agenda-content" class="agenda-content"></div>
@@ -125,11 +117,10 @@
             <section id="calendar-panel" class="panel calendar-panel" aria-labelledby="calendar-title" tabindex="-1">
                 <div class="panel-head calendar-head">
                     <div>
-                        <p class="eyebrow">Plan your month</p>
                         <h2 id="calendar-title" class="panel-title">Calendar</h2>
                         <p id="calendar-subtitle" class="panel-subtitle">Loading events…</p>
                     </div>
-                    <button class="btn btn-secondary btn-sm calendar-add" type="button" data-add-event>
+                    <button class="btn btn-primary btn-sm calendar-add" type="button" data-add-event>
                         <span data-icon="plus"></span>
                         New event
                     </button>
@@ -165,7 +156,7 @@
                     <div class="assistant-identity">
                         <span class="assistant-avatar" data-icon="sparkles"></span>
                         <div>
-                            <h2 id="assistant-title" class="panel-title">TaskAI Assistant</h2>
+                            <h2 id="assistant-title" class="panel-title">Assistant</h2>
                             <p id="quota-label" class="panel-subtitle">Loading request limit…</p>
                         </div>
                     </div>
@@ -186,7 +177,7 @@
                 </div>
 
                 <p id="quota-banner" class="quota-banner" role="status" hidden>
-                    Daily AI request limit reached. Requests will be available again after the daily reset.
+                    Daily request limit reached. Try again tomorrow.
                 </p>
 
                 <details id="preferences" class="preferences">
@@ -234,7 +225,6 @@
         <form id="event-form" class="modal-card" novalidate>
             <div class="modal-head">
                 <div>
-                    <p class="eyebrow">Event details</p>
                     <h2 id="event-dialog-title" class="modal-title">New event</h2>
                 </div>
                 <button id="event-close" class="icon-btn" type="button" aria-label="Close dialog">
@@ -266,7 +256,6 @@
                 <label class="switch-row" for="event-all-day">
                     <span class="switch-copy">
                         <span class="field-label">All day</span>
-                        <span class="field-hint">Hide the start and end times.</span>
                     </span>
                     <input id="event-all-day" class="switch-input" type="checkbox">
                     <span class="switch" aria-hidden="true"></span>
